@@ -1,0 +1,25 @@
+# Farmhand worker systemd template.
+# This unit is intentionally invalid until every EDIT_ME value is replaced.
+# Test the exact ExecStart command as the selected user before enabling it.
+
+[Unit]
+Description=Farmhand Blender render worker
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=EDIT_ME_WORKER_USER
+WorkingDirectory=/EDIT_ME/absolute/path/to/farmhand
+ExecStart=/EDIT_ME/absolute/path/to/farmhand/.venv/bin/python -m worker.agent --config /EDIT_ME/absolute/path/to/farmhand/worker/config.toml
+Environment=PYTHONUNBUFFERED=1
+Restart=always
+RestartSec=10
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
+

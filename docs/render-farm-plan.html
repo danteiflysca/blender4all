@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Farmhand — LAN Render Farm Build Plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0B0C0E;
+    --panel: #111316;
+    --panel-2: #15181C;
+    --border: #22262C;
+    --border-soft: #1A1D22;
+    --text: #E7E9EC;
+    --muted: #9AA1AB;
+    --faint: #6B7280;
+    --accent: #F5792A;        /* Blender orange */
+    --accent-dim: #B85A20;
+    --done: #3FB950;
+    --rendering: #F5792A;
+    --pending: #3A4048;
+    --failed: #F85149;
+    --mono: 'Geist Mono', ui-monospace, monospace;
+    --sans: 'Geist', system-ui, sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection { background: rgba(245,121,42,.28); }
+
+  .wrap { max-width: 880px; margin: 0 auto; padding: 0 28px; }
+
+  /* ---------- header ---------- */
+  header { padding: 72px 0 48px; border-bottom: 1px solid var(--border-soft); }
+  .eyebrow {
+    font-family: var(--mono); font-size: 12px; font-weight: 500;
+    color: var(--accent); letter-spacing: .08em; text-transform: uppercase;
+    margin-bottom: 18px;
+  }
+  h1 { font-size: 42px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.1; margin-bottom: 14px; }
+  .subtitle { color: var(--muted); font-size: 17px; max-width: 620px; }
+
+  /* frame strip — signature element */
+  .frame-strip { display: flex; gap: 4px; margin-top: 36px; flex-wrap: wrap; }
+  .frame-strip .f {
+    width: 14px; height: 14px; border-radius: 3px; background: var(--pending);
+    position: relative;
+  }
+  .frame-strip .f.done { background: var(--done); opacity: .85; }
+  .frame-strip .f.rendering { background: var(--rendering); animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+  @media (prefers-reduced-motion: reduce) { .frame-strip .f.rendering { animation: none; } }
+  .strip-caption { font-family: var(--mono); font-size: 11px; color: var(--faint); margin-top: 10px; }
+  .strip-caption b { color: var(--muted); font-weight: 500; }
+
+  /* ---------- TOC ---------- */
+  nav.toc { padding: 36px 0; border-bottom: 1px solid var(--border-soft); }
+  nav.toc ol { list-style: none; counter-reset: toc; columns: 2; column-gap: 48px; }
+  nav.toc li { counter-increment: toc; margin-bottom: 8px; break-inside: avoid; }
+  nav.toc a {
+    color: var(--muted); text-decoration: none; font-size: 14px;
+    display: flex; gap: 12px; padding: 3px 0; transition: color .12s;
+  }
+  nav.toc a:hover, nav.toc a:focus-visible { color: var(--text); }
+  nav.toc a::before {
+    content: counter(toc, decimal-leading-zero);
+    font-family: var(--mono); font-size: 12px; color: var(--faint); padding-top: 2px;
+  }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+
+  /* ---------- sections ---------- */
+  section { padding: 56px 0; border-bottom: 1px solid var(--border-soft); }
+  section:last-of-type { border-bottom: none; }
+  .sec-label {
+    font-family: var(--mono); font-size: 12px; color: var(--accent);
+    letter-spacing: .08em; text-transform: uppercase; margin-bottom: 10px; font-weight: 500;
+  }
+  h2 { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 18px; }
+  h3 { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; margin: 32px 0 10px; }
+  h4 { font-size: 14px; font-weight: 600; margin: 24px 0 8px; color: var(--text); }
+  p { color: var(--muted); margin-bottom: 14px; max-width: 72ch; }
+  p strong, li strong { color: var(--text); font-weight: 600; }
+  ul, ol { color: var(--muted); padding-left: 22px; margin-bottom: 14px; }
+  li { margin-bottom: 7px; }
+  li::marker { color: var(--faint); }
+
+  code {
+    font-family: var(--mono); font-size: 13px;
+    background: var(--panel-2); border: 1px solid var(--border-soft);
+    padding: 1px 6px; border-radius: 4px; color: #E8B08A;
+    white-space: nowrap;
+  }
+  pre {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 18px 20px; overflow-x: auto;
+    margin: 14px 0 22px; line-height: 1.55;
+  }
+  pre code {
+    background: none; border: none; padding: 0; white-space: pre;
+    color: #D2D6DB; font-size: 13px;
+  }
+  pre .c  { color: var(--faint); }         /* comment */
+  pre .k  { color: #F5792A; }              /* keyword / method */
+  pre .s  { color: #A5C89A; }              /* string */
+  pre .n  { color: #8FBCE6; }              /* number / path */
+
+  table { width: 100%; border-collapse: collapse; margin: 14px 0 22px; font-size: 14px; }
+  th {
+    text-align: left; font-family: var(--mono); font-size: 11px; font-weight: 500;
+    text-transform: uppercase; letter-spacing: .07em; color: var(--faint);
+    padding: 8px 14px; border-bottom: 1px solid var(--border);
+  }
+  td { padding: 10px 14px; border-bottom: 1px solid var(--border-soft); color: var(--muted); vertical-align: top; }
+  td:first-child { color: var(--text); }
+  td code { white-space: nowrap; }
+
+  .callout {
+    border: 1px solid var(--border); border-left: 3px solid var(--accent);
+    background: var(--panel); border-radius: 6px; padding: 14px 18px; margin: 18px 0;
+  }
+  .callout p:last-child { margin-bottom: 0; }
+  .callout .co-label {
+    font-family: var(--mono); font-size: 11px; color: var(--accent);
+    text-transform: uppercase; letter-spacing: .07em; margin-bottom: 6px; font-weight: 500;
+  }
+
+  .checklist { list-style: none; padding-left: 0; }
+  .checklist li { padding-left: 30px; position: relative; }
+  .checklist li::before {
+    content: ""; position: absolute; left: 0; top: 5px;
+    width: 15px; height: 15px; border: 1.5px solid var(--faint); border-radius: 4px;
+  }
+
+  .state { font-family: var(--mono); font-size: 12px; padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
+  .state.pending   { background: rgba(58,64,72,.5);   color: #B7BEC7; }
+  .state.rendering { background: rgba(245,121,42,.15); color: var(--accent); }
+  .state.done      { background: rgba(63,185,80,.15);  color: var(--done); }
+  .state.failed    { background: rgba(248,81,73,.15);  color: var(--failed); }
+
+  .arch { margin: 20px 0 8px; }
+  .arch svg { width: 100%; height: auto; display: block; }
+
+  .phase-tag {
+    display: inline-block; font-family: var(--mono); font-size: 12px;
+    color: var(--bg); background: var(--accent); border-radius: 4px;
+    padding: 2px 9px; font-weight: 600; margin-bottom: 12px;
+  }
+  .est { font-family: var(--mono); font-size: 12px; color: var(--faint); margin-left: 10px; }
+
+  footer { padding: 40px 0 72px; color: var(--faint); font-size: 13px; font-family: var(--mono); }
+
+  @media (max-width: 640px) {
+    h1 { font-size: 32px; }
+    nav.toc ol { columns: 1; }
+    .wrap { padding: 0 18px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="eyebrow">Build Plan · v1.0 · July 2026</div>
+    <h1>Farmhand<br>A headless LAN render farm for Blender</h1>
+    <p class="subtitle">Distribute animation frames across spare machines on your network. One language, four components, no database server, no desktop app. This document is the complete spec — every endpoint, file layout, command, and acceptance test — written to be handed to Claude Code phase by phase.</p>
+    <div class="frame-strip" aria-hidden="true">
+      <div class="f done"></div><div class="f done"></div><div class="f done"></div><div class="f done"></div><div class="f done"></div><div class="f done"></div><div class="f done"></div><div class="f done"></div><div class="f done"></div><div class="f done"></div><div class="f done"></div><div class="f done"></div><div class="f rendering"></div><div class="f rendering"></div><div class="f rendering"></div><div class="f pending"></div><div class="f pending"></div><div class="f pending"></div><div class="f pending"></div><div class="f pending"></div><div class="f pending"></div><div class="f pending"></div><div class="f pending"></div><div class="f pending"></div><div class="f pending"></div><div class="f pending"></div><div class="f pending"></div><div class="f pending"></div><div class="f pending"></div><div class="f pending"></div><div class="f pending"></div><div class="f pending"></div>
+    </div>
+    <div class="strip-caption"><b>frames 1–32</b> · 12 done · 3 rendering · 17 pending — the entire system exists to move squares from gray to green</div>
+  </div>
+</header>
+
+<nav class="toc">
+  <div class="wrap">
+    <ol>
+      <li><a href="#architecture">System architecture</a></li>
+      <li><a href="#stack">Tech stack & repo layout</a></li>
+      <li><a href="#contract">The API contract (build this first, on paper)</a></li>
+      <li><a href="#phase1">Phase 1 — Worker agent</a></li>
+      <li><a href="#phase2">Phase 2 — Coordinator</a></li>
+      <li><a href="#phase3">Phase 3 — Blender add-on</a></li>
+      <li><a href="#phase4">Phase 4 — Hardening & status page</a></li>
+      <li><a href="#gotchas">The three genuinely fiddly bits</a></li>
+      <li><a href="#testing">Testing strategy & curl playbook</a></li>
+      <li><a href="#ai">Working with AI on this build</a></li>
+      <li><a href="#later">Explicitly out of scope for v1</a></li>
+    </ol>
+  </div>
+</nav>
+
+<!-- ================================================================ -->
+<section id="architecture">
+  <div class="wrap">
+    <div class="sec-label">01 — Overview</div>
+    <h2>System architecture</h2>
+    <p>Three processes, one shared HTTP contract. The <strong>coordinator</strong> is the only stateful piece: it owns the frame queue, stores the packed .blend, and collects finished frames. <strong>Workers</strong> are stateless pull-based loops — they ask for work, do it, hand it back. The <strong>Blender add-on</strong> is just a convenient client for the coordinator's submit endpoint; the farm works without it.</p>
+
+    <div class="arch" role="img" aria-label="Architecture diagram: Blender add-on submits jobs to the coordinator, which serves frames to three worker machines over HTTP">
+      <svg viewBox="0 0 840 300" xmlns="http://www.w3.org/2000/svg" font-family="Geist Mono, monospace">
+        <!-- Blender add-on -->
+        <rect x="20" y="100" width="180" height="90" rx="8" fill="#15181C" stroke="#22262C"/>
+        <text x="110" y="135" fill="#E7E9EC" font-size="13" text-anchor="middle" font-weight="600">Blender add-on</text>
+        <text x="110" y="155" fill="#9AA1AB" font-size="11" text-anchor="middle">pack · submit · poll</text>
+        <text x="110" y="172" fill="#6B7280" font-size="10" text-anchor="middle">(your workstation)</text>
+        <!-- Coordinator -->
+        <rect x="320" y="80" width="200" height="130" rx="8" fill="#15181C" stroke="#F5792A" stroke-width="1.5"/>
+        <text x="420" y="115" fill="#F5792A" font-size="13" text-anchor="middle" font-weight="600">Coordinator</text>
+        <text x="420" y="136" fill="#9AA1AB" font-size="11" text-anchor="middle">FastAPI · frame queue</text>
+        <text x="420" y="153" fill="#9AA1AB" font-size="11" text-anchor="middle">SQLite · file storage</text>
+        <text x="420" y="175" fill="#6B7280" font-size="10" text-anchor="middle">port 8420</text>
+        <!-- Workers -->
+        <rect x="650" y="30" width="170" height="66" rx="8" fill="#15181C" stroke="#22262C"/>
+        <text x="735" y="57" fill="#E7E9EC" font-size="12" text-anchor="middle" font-weight="600">Worker · shop PC</text>
+        <text x="735" y="76" fill="#9AA1AB" font-size="10" text-anchor="middle">blender -b · GPU</text>
+        <rect x="650" y="117" width="170" height="66" rx="8" fill="#15181C" stroke="#22262C"/>
+        <text x="735" y="144" fill="#E7E9EC" font-size="12" text-anchor="middle" font-weight="600">Worker · old tower</text>
+        <text x="735" y="163" fill="#9AA1AB" font-size="10" text-anchor="middle">blender -b · GPU</text>
+        <rect x="650" y="204" width="170" height="66" rx="8" fill="#15181C" stroke="#22262C"/>
+        <text x="735" y="231" fill="#E7E9EC" font-size="12" text-anchor="middle" font-weight="600">Worker · laptop</text>
+        <text x="735" y="250" fill="#9AA1AB" font-size="10" text-anchor="middle">blender -b · CPU</text>
+        <!-- arrows -->
+        <defs>
+          <marker id="arr" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+            <path d="M0,0 L8,4 L0,8" fill="none" stroke="#6B7280" stroke-width="1.2"/>
+          </marker>
+        </defs>
+        <line x1="200" y1="135" x2="315" y2="135" stroke="#6B7280" stroke-width="1.2" marker-end="url(#arr)"/>
+        <text x="258" y="126" fill="#6B7280" font-size="10" text-anchor="middle">POST /jobs</text>
+        <line x1="200" y1="165" x2="315" y2="165" stroke="#3A4048" stroke-width="1.2" stroke-dasharray="4 4" marker-end="url(#arr)"/>
+        <text x="258" y="182" fill="#6B7280" font-size="10" text-anchor="middle">GET status</text>
+        <line x1="524" y1="105" x2="645" y2="66" stroke="#6B7280" stroke-width="1.2" marker-end="url(#arr)"/>
+        <line x1="524" y1="148" x2="645" y2="149" stroke="#6B7280" stroke-width="1.2" marker-end="url(#arr)"/>
+        <line x1="524" y1="190" x2="645" y2="234" stroke="#6B7280" stroke-width="1.2" marker-end="url(#arr)"/>
+        <text x="585" y="140" fill="#6B7280" font-size="10" text-anchor="middle">pull frames /</text>
+        <text x="585" y="168" fill="#6B7280" font-size="10" text-anchor="middle">push results</text>
+      </svg>
+    </div>
+
+    <h3>Design decisions locked for v1</h3>
+    <table>
+      <thead><tr><th>Decision</th><th>Choice</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Work distribution</td><td>Pull, not push</td><td>Workers request frames when idle. No coordinator-side scheduling, no knowledge of worker capacity, natural load balancing — fast machines simply ask more often.</td></tr>
+        <tr><td>Unit of work</td><td>One frame</td><td>Simple retry semantics. A dead worker costs you one frame's progress, not a chunk. Frame batching is a v2 optimization.</td></tr>
+        <tr><td>Transport</td><td>Plain HTTP, LAN only</td><td>No WebSockets, no message broker. Everything is a request/response you can replay with curl.</td></tr>
+        <tr><td>Discovery</td><td>Config file with coordinator IP</td><td>mDNS/broadcast discovery is a v2 nicety. You have three machines; type the IP once.</td></tr>
+        <tr><td>State</td><td>SQLite via stdlib <code>sqlite3</code></td><td>Survives coordinator restarts (an in-memory dict loses a half-finished 400-frame job to one Ctrl-C). Zero extra dependencies.</td></tr>
+        <tr><td>Auth</td><td>Single shared token, v1</td><td>One <code>X-Farm-Token</code> header checked by middleware. Not real security — it prevents accidents, not attackers. The farm never leaves the LAN.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ================================================================ -->
+<section id="stack">
+  <div class="wrap">
+    <div class="sec-label">02 — Foundation</div>
+    <h2>Tech stack & repo layout</h2>
+    <table>
+      <thead><tr><th>Component</th><th>Stack</th><th>Runs on</th></tr></thead>
+      <tbody>
+        <tr><td>Worker agent</td><td>Python 3.11+, <code>httpx</code>, <code>subprocess</code></td><td>Each helper PC (Windows/macOS/Linux)</td></tr>
+        <tr><td>Coordinator</td><td>Python 3.11+, FastAPI, uvicorn, <code>sqlite3</code></td><td>Main machine, port <code>8420</code></td></tr>
+        <tr><td>Blender add-on</td><td>Python (bpy), stdlib <code>urllib</code> only</td><td>Inside Blender on your workstation</td></tr>
+        <tr><td>Status page</td><td>Single HTML file served by FastAPI, vanilla JS polling</td><td>Coordinator, <code>GET /</code></td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout">
+      <div class="co-label">Add-on dependency rule</div>
+      <p>The add-on must use only the Python standard library (<code>urllib.request</code>, <code>json</code>, <code>hashlib</code>). Blender's bundled Python can't be relied on to have pip packages, and vendoring wheels into an add-on is misery you don't need for four HTTP calls.</p>
+    </div>
+
+    <h3>Monorepo layout</h3>
+<pre><code>farmhand/
+├── coordinator/
+│   ├── main.py            <span class="c"># FastAPI app, all endpoints</span>
+│   ├── db.py              <span class="c"># SQLite schema + queries</span>
+│   ├── models.py          <span class="c"># Pydantic request/response models</span>
+│   ├── static/
+│   │   └── status.html    <span class="c"># Phase 4 dashboard</span>
+│   ├── storage/           <span class="c"># runtime, gitignored</span>
+│   │   ├── blends/{job_id}.blend
+│   │   └── frames/{job_id}/frame_0001.png
+│   └── farm.db            <span class="c"># runtime, gitignored</span>
+├── worker/
+│   ├── agent.py           <span class="c"># the entire worker, one file</span>
+│   └── config.toml        <span class="c"># coordinator URL, token, blender path</span>
+├── addon/
+│   └── farmhand_submit/
+│       ├── __init__.py    <span class="c"># bl_info, register/unregister</span>
+│       ├── panel.py       <span class="c"># N-panel UI</span>
+│       ├── operators.py   <span class="c"># submit, cancel, refresh operators</span>
+│       └── client.py      <span class="c"># urllib HTTP client</span>
+├── stub_server.py         <span class="c"># Phase 1 test harness (see §4)</span>
+├── shared/
+│   └── API.md             <span class="c"># the contract — single source of truth</span>
+└── README.md</code></pre>
+
+    <h3>Ports, paths, conventions</h3>
+    <ul>
+      <li>Coordinator listens on <code>0.0.0.0:8420</code>. Workers reach it at <code>http://192.168.x.x:8420</code> from their config file.</li>
+      <li>Job IDs are <code>uuid4</code> hex strings. Frame numbers are integers, zero-padded to 4 digits in filenames.</li>
+      <li>Output format for v1 is <strong>PNG only</strong> (single-file-per-frame keeps the upload endpoint trivial; EXR multilayer works identically but makes files huge — add it in v2 with a format field).</li>
+      <li>All timestamps are UTC ISO-8601. All JSON keys are <code>snake_case</code>.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ================================================================ -->
+<section id="contract">
+  <div class="wrap">
+    <div class="sec-label">03 — The Contract</div>
+    <h2>The API contract (build this first, on paper)</h2>
+    <p>Everything else in this plan implements one side of this table. Write it into <code>shared/API.md</code> before any code exists, and when the AI proposes a change mid-build, update the contract file first — it is the single source of truth all three components are built against.</p>
+
+    <table>
+      <thead><tr><th>Endpoint</th><th>Caller</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><code>POST /jobs</code></td><td>Add-on</td><td>Multipart upload: <code>blend_file</code> + JSON <code>params</code> (frame range, step, output format, engine). Returns <code>{job_id}</code>.</td></tr>
+        <tr><td><code>GET /jobs/{id}</code></td><td>Add-on, status page</td><td>Full job status: counts per state, per-frame detail, connected workers.</td></tr>
+        <tr><td><code>POST /jobs/{id}/cancel</code></td><td>Add-on, status page</td><td>Marks job cancelled; pending frames won't be handed out.</td></tr>
+        <tr><td><code>GET /work?worker_id=X&blender_version=Y</code></td><td>Worker</td><td>Atomically claim the next pending frame from any active job. Returns frame assignment or <code>204 No Content</code>.</td></tr>
+        <tr><td><code>GET /jobs/{id}/blend</code></td><td>Worker</td><td>Streams the packed .blend. Response includes <code>X-Blend-SHA256</code> header for cache validation.</td></tr>
+        <tr><td><code>POST /jobs/{id}/frames/{n}/result</code></td><td>Worker</td><td>Multipart upload of the rendered frame, or JSON failure report with the Blender stderr tail.</td></tr>
+        <tr><td><code>GET /</code></td><td>Browser</td><td>Status dashboard (Phase 4).</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Key payloads, verbatim</h3>
+    <h4><code>GET /work</code> → 200 (work available)</h4>
+<pre><code>{
+  <span class="s">"job_id"</span>: <span class="s">"a3f8c2..."</span>,
+  <span class="s">"frame"</span>: <span class="n">147</span>,
+  <span class="s">"blend_sha256"</span>: <span class="s">"9d41be..."</span>,      <span class="c">// worker compares to its cache</span>
+  <span class="s">"blend_url"</span>: <span class="s">"/jobs/a3f8c2.../blend"</span>,
+  <span class="s">"output_format"</span>: <span class="s">"PNG"</span>,
+  <span class="s">"engine"</span>: <span class="s">"CYCLES"</span>,
+  <span class="s">"lease_seconds"</span>: <span class="n">1800</span>              <span class="c">// deadline before frame is requeued</span>
+}</code></pre>
+      <h4><code>GET /work</code> → 204 (nothing to do — worker sleeps <code>poll_interval</code> and retries)</h4>
+      <h4><code>POST .../result</code> failure body</h4>
+<pre><code>{
+  <span class="s">"status"</span>: <span class="s">"failed"</span>,
+  <span class="s">"exit_code"</span>: <span class="n">1</span>,
+  <span class="s">"stderr_tail"</span>: <span class="s">"Error: Out of GPU memory ..."</span>  <span class="c">// last ~4KB, invaluable for debugging</span>
+}</code></pre>
+
+    <h3>Frame state machine</h3>
+    <p>Every frame is a row that moves through exactly these states. This is the heart of the coordinator — get this right and everything else is plumbing.</p>
+    <table>
+      <thead><tr><th>Transition</th><th>Trigger</th></tr></thead>
+      <tbody>
+        <tr><td><span class="state pending">pending</span> → <span class="state rendering">rendering</span></td><td>Worker claims it via <code>GET /work</code>. Row records <code>worker_id</code>, <code>lease_expires_at = now + lease_seconds</code>.</td></tr>
+        <tr><td><span class="state rendering">rendering</span> → <span class="state done">done</span></td><td>Worker uploads a valid frame file before the lease expires.</td></tr>
+        <tr><td><span class="state rendering">rendering</span> → <span class="state pending">pending</span></td><td>Lease expires (worker crashed / lost power / went to lunch). A background task sweeps every 30s. <code>attempts += 1</code>.</td></tr>
+        <tr><td><span class="state rendering">rendering</span> → <span class="state failed">failed</span></td><td>Worker reports failure, or <code>attempts</code> reaches 3. Failed frames keep the <code>stderr_tail</code> for the status page.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ================================================================ -->
+<section id="phase1">
+  <div class="wrap">
+    <div class="sec-label">04 — Build</div>
+    <span class="phase-tag">Phase 1</span><span class="est">~half a day · target ≤150 lines</span>
+    <h2>Worker agent</h2>
+    <p>Built first, against a stub server, so the trickiest real-world piece — invoking headless Blender correctly with GPU rendering — is proven before any farm exists. The worker is a single file with a single loop and no state beyond a blend cache directory.</p>
+
+    <h3>Config file — <code>worker/config.toml</code></h3>
+<pre><code>coordinator_url = <span class="s">"http://192.168.1.50:8420"</span>
+token           = <span class="s">"pick-a-long-random-string"</span>
+worker_id       = <span class="s">"shop-pc"</span>          <span class="c"># human-readable, shows on dashboard</span>
+blender_path    = <span class="s">"C:/Program Files/Blender Foundation/Blender 4.5/blender.exe"</span>
+work_dir        = <span class="s">"C:/farmhand"</span>      <span class="c"># blend cache + render output scratch</span>
+poll_interval   = <span class="n">10</span>                  <span class="c"># seconds to sleep on 204</span>
+gpu             = <span class="s">"OPTIX"</span>            <span class="c"># OPTIX | CUDA | HIP | METAL | NONE (CPU)</span></code></pre>
+
+    <h3>The loop, in pseudocode</h3>
+<pre><code><span class="k">while</span> True:
+    work = GET /work?worker_id=...&blender_version=...     <span class="c"># with token header</span>
+    <span class="k">if</span> 204: sleep(poll_interval); <span class="k">continue</span>
+
+    <span class="k">if</span> work.blend_sha256 <span class="k">not in</span> local cache:               <span class="c"># cache keyed by hash,</span>
+        download blend_url → work_dir/cache/{sha}.blend    <span class="c"># NOT by job id</span>
+        verify sha256 of downloaded bytes matches           <span class="c"># corrupt = delete + retry once</span>
+
+    run blender headless on frame N                         <span class="c"># see command below</span>
+    <span class="k">if</span> exit 0 <span class="k">and</span> output file exists <span class="k">and</span> size > 0:
+        POST result (multipart file upload)
+    <span class="k">else</span>:
+        POST result {status: failed, exit_code, stderr_tail}
+    delete local output file</code></pre>
+
+    <h3>The Blender invocation — the part worth getting exactly right</h3>
+<pre><code>blender -b <span class="n">{cache}/{sha}.blend</span> \
+  --python-expr <span class="s">"{gpu_setup}"</span> \
+  -o <span class="s">"{work_dir}/out/frame_####"</span> \
+  -F PNG -noaudio \
+  -f <span class="n">{N}</span></code></pre>
+    <p>where <code>gpu_setup</code> is this one-liner (built from the config's <code>gpu</code> value; omitted entirely when <code>gpu = "NONE"</code>):</p>
+<pre><code><span class="k">import</span> bpy
+prefs = bpy.context.preferences.addons[<span class="s">'cycles'</span>].preferences
+prefs.compute_device_type = <span class="s">'OPTIX'</span>
+prefs.get_devices()                          <span class="c"># must call this to populate the list</span>
+<span class="k">for</span> d <span class="k">in</span> prefs.devices: d.use = <span class="k">True</span>
+bpy.context.scene.cycles.device = <span class="s">'GPU'</span></code></pre>
+    <div class="callout">
+      <div class="co-label">Why this is necessary</div>
+      <p>Headless Blender does <strong>not</strong> inherit the desktop preferences where you enabled your GPU. Without this expression, every worker silently renders on CPU and you'll wonder why your farm is slower than your workstation. Flag order matters too: <code>-f</code> must come <em>after</em> <code>-o</code> and <code>-F</code>, because Blender processes CLI arguments strictly left to right.</p>
+    </div>
+
+    <h3>Details the AI will forget unless told</h3>
+    <ul>
+      <li><strong>Capture stderr and stdout</strong> to a rotating buffer; keep the last 4KB for failure reports. Blender's error messages are the only debugging signal you get from a remote machine.</li>
+      <li><strong>Timeout the subprocess</strong> at <code>lease_seconds - 60</code> so a hung Blender doesn't zombie the worker past its lease.</li>
+      <li><strong>Find the actual output file</strong>: Blender substitutes <code>####</code> with the padded frame number — after rendering frame 147 look for <code>frame_0147.png</code>.</li>
+      <li><strong>Network errors never crash the loop.</strong> Any request failure logs a line, sleeps, retries. The worker should survive the coordinator rebooting.</li>
+      <li><strong>Report <code>blender --version</code></strong> (parsed once at startup) on every <code>/work</code> call — the coordinator uses it for version-mismatch rejection in Phase 4.</li>
+      <li><strong>Blend cache eviction:</strong> keep the 3 most recent blends, delete older ones. Packed files with textures get big.</li>
+    </ul>
+
+    <h3>Acceptance — Phase 1 is done when</h3>
+    <ul class="checklist">
+      <li>Against the stub server, the worker downloads a blend, renders the assigned frame, and uploads a valid PNG.</li>
+      <li>GPU is verifiably active during render (watch GPU utilization, or check render time vs. CPU).</li>
+      <li>Kill the stub mid-loop: worker logs the error and keeps polling, no crash.</li>
+      <li>A deliberately broken .blend produces a <code>failed</code> report containing usable stderr.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ================================================================ -->
+<section id="phase2">
+  <div class="wrap">
+    <div class="sec-label">05 — Build</div>
+    <span class="phase-tag">Phase 2</span><span class="est">~one day</span>
+    <h2>Coordinator</h2>
+    <p>A FastAPI app whose entire job is bookkeeping: which frames exist, what state they're in, who's working on what. Once this runs, you have a functioning farm you can drive entirely with curl — the add-on is a convenience, not a requirement.</p>
+
+    <h3>SQLite schema</h3>
+<pre><code><span class="k">CREATE TABLE</span> jobs (
+  id            TEXT PRIMARY KEY,
+  name          TEXT,               <span class="c">-- blend filename, for the dashboard</span>
+  blend_sha256  TEXT NOT NULL,
+  frame_start   INTEGER, frame_end INTEGER, frame_step INTEGER DEFAULT 1,
+  output_format TEXT DEFAULT <span class="s">'PNG'</span>,
+  engine        TEXT DEFAULT <span class="s">'CYCLES'</span>,
+  status        TEXT DEFAULT <span class="s">'active'</span>,   <span class="c">-- active | complete | cancelled</span>
+  created_at    TEXT
+);
+<span class="k">CREATE TABLE</span> frames (
+  job_id           TEXT REFERENCES jobs(id),
+  frame            INTEGER,
+  state            TEXT DEFAULT <span class="s">'pending'</span>,  <span class="c">-- pending|rendering|done|failed</span>
+  worker_id        TEXT,
+  lease_expires_at TEXT,
+  attempts         INTEGER DEFAULT 0,
+  stderr_tail      TEXT,
+  render_seconds   REAL,
+  PRIMARY KEY (job_id, frame)
+);</code></pre>
+
+    <h3>Endpoint behavior specs</h3>
+    <h4><code>POST /jobs</code></h4>
+    <ul>
+      <li>Accepts multipart: <code>blend_file</code> (the packed .blend) and <code>params</code> (JSON string: <code>frame_start</code>, <code>frame_end</code>, <code>frame_step</code>, <code>output_format</code>, <code>engine</code>, <code>name</code>).</li>
+      <li>Streams the upload to <code>storage/blends/{job_id}.blend</code>, computing SHA-256 while writing (packed files can be gigabytes — never buffer in memory).</li>
+      <li>Inserts one <code>frames</code> row per frame in <code>range(start, end + 1, step)</code>. Rejects ranges over 10,000 frames with a 422 as a sanity guard.</li>
+    </ul>
+
+    <h4><code>GET /work</code> — the one piece of genuinely careful code</h4>
+    <ul>
+      <li>Claiming must be <strong>atomic</strong> so two workers polling simultaneously never get the same frame. In SQLite, one statement does it:</li>
+    </ul>
+<pre><code><span class="k">UPDATE</span> frames <span class="k">SET</span> state=<span class="s">'rendering'</span>, worker_id=?, lease_expires_at=?
+<span class="k">WHERE</span> rowid = (
+  <span class="k">SELECT</span> f.rowid <span class="k">FROM</span> frames f <span class="k">JOIN</span> jobs j <span class="k">ON</span> j.id = f.job_id
+  <span class="k">WHERE</span> f.state=<span class="s">'pending'</span> <span class="k">AND</span> j.status=<span class="s">'active'</span>
+  <span class="k">ORDER BY</span> j.created_at, f.frame <span class="k">LIMIT</span> 1
+) <span class="k">RETURNING</span> job_id, frame;</code></pre>
+    <ul>
+      <li>Open SQLite in WAL mode (<code>PRAGMA journal_mode=WAL</code>) and use a single connection guarded by a lock, or set <code>check_same_thread=False</code> with care. This is the concurrency hotspot of the whole system.</li>
+      <li>No pending frames → <code>204</code>. Also record <code>worker_id → last_seen</code> in a memory dict for the dashboard's worker list.</li>
+    </ul>
+
+    <h4><code>POST /jobs/{id}/frames/{n}/result</code></h4>
+    <ul>
+      <li>Success: stream file to <code>storage/frames/{job_id}/frame_{n:04d}.png</code>, mark <span class="state done">done</span>, record <code>render_seconds</code>.</li>
+      <li>Failure: store <code>stderr_tail</code>; requeue as <span class="state pending">pending</span> if <code>attempts &lt; 3</code>, else mark <span class="state failed">failed</span>.</li>
+      <li>Reject results for frames this worker doesn't hold (lease expired and reassigned — the late upload is discarded with a 409). When the last frame lands, flip the job to <code>complete</code>.</li>
+    </ul>
+
+    <h4>Lease sweeper</h4>
+    <ul>
+      <li>An <code>asyncio</code> background task every 30s: any <span class="state rendering">rendering</span> frame with <code>lease_expires_at &lt; now</code> goes back to <span class="state pending">pending</span>, <code>attempts += 1</code> (or <span class="state failed">failed</span> at 3).</li>
+    </ul>
+
+    <h3>Acceptance — Phase 2 is done when</h3>
+    <ul class="checklist">
+      <li>The full curl playbook (§09) works end to end with no add-on and no real worker.</li>
+      <li>Two real workers on two machines drain a 20-frame job with zero duplicate renders.</li>
+      <li>Kill a worker mid-frame: within one sweep after lease expiry, the frame is pending again and the other worker picks it up.</li>
+      <li>Restart the coordinator mid-job: state survives, workers reconnect on their next poll, job finishes.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ================================================================ -->
+<section id="phase3">
+  <div class="wrap">
+    <div class="sec-label">06 — Build</div>
+    <span class="phase-tag">Phase 3</span><span class="est">~one day</span>
+    <h2>Blender add-on</h2>
+    <p>An N-panel in the 3D viewport sidebar: <strong>Render on Farm</strong>. It packs, uploads, and shows progress. It never renders anything itself.</p>
+
+    <h3>Panel layout (Properties → Output-adjacent, or N-panel "Farmhand" tab)</h3>
+    <table>
+      <thead><tr><th>Element</th><th>Behavior</th></tr></thead>
+      <tbody>
+        <tr><td>Coordinator URL + token</td><td>Add-on preferences (persisted in Blender prefs, not per-file). Panel shows a red warning row if unset.</td></tr>
+        <tr><td>Frame range</td><td>Defaults pulled live from <code>scene.frame_start / frame_end / frame_step</code>, overridable.</td></tr>
+        <tr><td>"Render on Farm" button</td><td>Runs the submit operator below. Disabled while a submission is in flight.</td></tr>
+        <tr><td>Progress row</td><td><code>done / total</code> + progress bar factor, plus per-state counts. Appears after submission.</td></tr>
+        <tr><td>"Cancel job" / "Open output folder"</td><td>Cancel calls the cancel endpoint; the output button is a v1.1 nicety once frame download exists.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>The submit operator, step by step</h3>
+    <ol>
+      <li><strong>Guard rails first:</strong> file must be saved (<code>bpy.data.is_saved</code>); warn on Blender version mismatch vs. coordinator's known worker versions; warn if any external references remain unpacked after step 2 (missing linked libraries are the classic silent failure).</li>
+      <li><strong>Pack:</strong> <code>bpy.ops.file.pack_all()</code> — embeds textures, but <em>not</em> linked libraries or most cache files (see §08). Then write a temp copy with <code>bpy.ops.wm.save_as_mainfile(filepath=tmp, copy=True)</code> so the user's working file and its saved state are untouched.</li>
+      <li><strong>Upload</strong> the temp copy via multipart <code>urllib</code> request (stdlib multipart is fiddly boilerplate — ~30 lines, write it once in <code>client.py</code>). Delete the temp file after.</li>
+      <li><strong>Store <code>job_id</code></strong> on the scene (<code>scene.farmhand_job_id</code> string property) so it survives file save/reload.</li>
+    </ol>
+
+    <div class="callout">
+      <div class="co-label">Do not freeze the UI</div>
+      <p>Packing + saving a copy is fast, but uploading 2GB is not, and a blocking operator locks all of Blender. Use a <strong>modal operator with a timer</strong>: kick the upload onto a <code>threading.Thread</code>, and have the modal's <code>TIMER</code> events check a thread-safe flag to report completion and errors. The same pattern drives status polling — a timer fires every 3s, calls <code>GET /jobs/{id}</code> on a thread, and writes results into scene properties, tagging the panel region for redraw. Never call <code>urllib</code> directly from <code>draw()</code>.</p>
+    </div>
+
+    <h3>Acceptance — Phase 3 is done when</h3>
+    <ul class="checklist">
+      <li>A textured scene submitted from the panel renders correctly on a worker that has never seen the texture files.</li>
+      <li>Blender stays fully responsive during a large upload.</li>
+      <li>Progress counts update live in the panel while workers churn.</li>
+      <li>Cancel stops new frames from being handed out within one poll cycle.</li>
+      <li>Coordinator unreachable → clean error in the panel, not a console traceback.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ================================================================ -->
+<section id="phase4">
+  <div class="wrap">
+    <div class="sec-label">07 — Build</div>
+    <span class="phase-tag">Phase 4</span><span class="est">~two days, spread out</span>
+    <h2>Hardening & status page</h2>
+    <h3>Status dashboard — <code>GET /</code></h3>
+    <p>One static HTML file, vanilla JS, polling <code>GET /jobs/{id}</code> every 3 seconds. No build step, no framework. It shows:</p>
+    <ul>
+      <li><strong>Frame grid</strong> — one small square per frame, colored by state (exactly the strip at the top of this document). This is the signature view: a glance tells you everything.</li>
+      <li><strong>Worker list</strong> — worker_id, Blender version, current frame, last-seen time; stale workers (&gt;60s) dimmed.</li>
+      <li><strong>Failed-frame panel</strong> — frame number + stderr tail, with a "requeue" button (<code>POST /jobs/{id}/frames/{n}/requeue</code>, resets attempts).</li>
+      <li><strong>ETA</strong> — rolling average of the last 10 <code>render_seconds</code> × remaining frames ÷ active workers. Crude and good enough.</li>
+    </ul>
+
+    <h3>Hardening checklist</h3>
+    <ul class="checklist">
+      <li><strong>Version enforcement:</strong> coordinator compares the worker's reported major.minor Blender version against the submitting Blender's version (sent in job params); mismatched workers get 204 + a logged warning instead of work.</li>
+      <li><strong>Upload retries:</strong> worker retries a failed result upload 3× with exponential backoff (2s/8s/30s) before abandoning — the render already cost minutes; don't waste it on a network blip.</li>
+      <li><strong>Disk guard:</strong> coordinator refuses new jobs below 5GB free; worker checks before downloading a blend.</li>
+      <li><strong>Requeue endpoint</strong> for failed frames (drives the dashboard button).</li>
+      <li><strong>Frame retrieval:</strong> <code>GET /jobs/{id}/frames.zip</code> streaming a zip of finished frames, so pulling results doesn't require filesystem access to the coordinator machine.</li>
+      <li><strong>Run-at-boot docs:</strong> a Windows Task Scheduler XML + a systemd unit file for the worker, in the repo README.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ================================================================ -->
+<section id="gotchas">
+  <div class="wrap">
+    <div class="sec-label">08 — Risk</div>
+    <h2>The three genuinely fiddly bits</h2>
+    <h3>1 · Blender version parity</h3>
+    <p>Files saved in 4.5 can crash or render differently in 4.2. The system treats <code>major.minor</code> as a hard compatibility key: workers report their version on every poll, the add-on stamps the job with the submitting version, and the coordinator simply refuses to match mismatched pairs. The fix is operational — install the same Blender everywhere — but the farm should <em>tell you</em> rather than produce subtly wrong frames.</p>
+
+    <h3>2 · Headless GPU configuration</h3>
+    <p>Covered in Phase 1: the <code>--python-expr</code> device setup is mandatory because <code>blender -b</code> ignores your desktop's Cycles device preferences. Per-machine wrinkles: OPTIX needs an NVIDIA driver new enough for the Blender build; a machine whose GPU has less VRAM than the scene needs will OOM — which is exactly what the <code>stderr_tail</code> in failure reports is for. The config's <code>gpu = "NONE"</code> escape hatch keeps a CPU-only machine useful.</p>
+
+    <h3>3 · Asset packing</h3>
+    <p><code>pack_all()</code> embeds images and a few other datablocks. It does <strong>not</strong> pack: <strong>linked libraries</strong> (other .blend files), <strong>simulation caches</strong> (fluid/cloth bakes pointing at directories), <strong>OS-installed fonts</strong> used by text objects, or absolute-path video textures. V1 policy: the add-on checks <code>bpy.data.libraries</code> and known cache users after packing and <em>blocks submission with a clear message</em> listing what won't travel. Make Library Overrides local, bake caches into the file where possible, or don't farm that scene. Detecting and bundling external directories is v2 territory.</p>
+  </div>
+</section>
+
+<!-- ================================================================ -->
+<section id="testing">
+  <div class="wrap">
+    <div class="sec-label">09 — Verify</div>
+    <h2>Testing strategy & curl playbook</h2>
+    <h3>Stub server (built alongside Phase 1)</h3>
+    <p><code>stub_server.py</code>: ~50 lines of FastAPI that hard-codes the contract — hands out frames 1–5 of a fixed test .blend, accepts any result, prints what it receives. It exists so the worker is testable before the coordinator does, and stays in the repo forever as the worker's regression harness.</p>
+
+    <h3>The curl playbook — a full render with no add-on</h3>
+<pre><code><span class="c"># 1. Pack a test scene manually in Blender (File → External Data → Pack Resources), save copy</span>
+
+<span class="c"># 2. Submit</span>
+curl -X POST http://localhost:8420/jobs \
+  -H <span class="s">"X-Farm-Token: $TOKEN"</span> \
+  -F <span class="s">"blend_file=@test_scene.blend"</span> \
+  -F <span class="s">'params={"name":"smoke test","frame_start":1,"frame_end":10,"frame_step":1,"engine":"CYCLES","output_format":"PNG"}'</span>
+<span class="c"># → {"job_id":"a3f8..."}</span>
+
+<span class="c"># 3. Pretend to be a worker</span>
+curl <span class="s">"http://localhost:8420/work?worker_id=fake&blender_version=4.5"</span> -H <span class="s">"X-Farm-Token: $TOKEN"</span>
+<span class="c"># → frame assignment JSON. Run again → next frame. State machine is visibly working.</span>
+
+<span class="c"># 4. Upload a fake result</span>
+curl -X POST http://localhost:8420/jobs/a3f8.../frames/1/result \
+  -H <span class="s">"X-Farm-Token: $TOKEN"</span> -F <span class="s">"frame_file=@any.png"</span>
+
+<span class="c"># 5. Watch status</span>
+curl http://localhost:8420/jobs/a3f8... -H <span class="s">"X-Farm-Token: $TOKEN"</span></code></pre>
+
+    <h3>Failure drills to run before calling it done</h3>
+    <ol>
+      <li><strong>Power test:</strong> pull the plug (or kill -9) on a worker mid-render. Frame requeues after lease expiry; job completes.</li>
+      <li><strong>Restart test:</strong> restart the coordinator mid-job. Nothing is lost; workers resume within one poll.</li>
+      <li><strong>Bad scene test:</strong> submit a .blend referencing a missing linked library and confirm the add-on blocks it at submit time.</li>
+      <li><strong>Slow network test:</strong> throttle a worker's connection; confirm result-upload retries succeed and no frame is double-rendered.</li>
+      <li><strong>The real test:</strong> a genuine 200+ frame animation across all machines overnight, then scrub the sequence for any frame rendered with wrong settings (the CPU-fallback frames render fine — they're just suspiciously slow and sometimes noisier).</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ================================================================ -->
+<section id="ai">
+  <div class="wrap">
+    <div class="sec-label">10 — Process</div>
+    <h2>Working with AI on this build</h2>
+    <p>This plan is structured so each phase is one self-contained Claude Code session with a testable exit condition. Practices that keep the build on rails:</p>
+    <ul>
+      <li><strong>Contract first, always.</strong> Start the very first session by having it write <code>shared/API.md</code> from §03 of this document. Every later session gets that file in context. When behavior needs to change, edit the contract, then the code.</li>
+      <li><strong>One phase per session.</strong> Give it the phase section plus the contract, not the whole plan. Smaller context, sharper output.</li>
+      <li><strong>Paste the acceptance checklist as the definition of done</strong> and have it write the stub-server test or curl script that proves each item — the checklists in this doc are written to be machine-verifiable on purpose.</li>
+      <li><strong>Feed it the gotchas verbatim.</strong> The GPU python-expr, the CLI argument ordering, the pack_all() blind spots, and the atomic-claim SQL are exactly the details a model will get subtly wrong from memory. They're spelled out in full above so you can paste rather than trust.</li>
+      <li><strong>Keep the worker to one file.</strong> Resist AI's instinct to abstract it into modules — a 150-line script you can read top to bottom is the feature.</li>
+      <li><strong>Commit at every green checklist.</strong> Each phase boundary is a tagged, working farm.</li>
+    </ul>
+
+    <h3>Suggested session order</h3>
+    <ol>
+      <li>Repo scaffold + <code>shared/API.md</code> + stub server</li>
+      <li>Worker agent against the stub (test on your workstation before touching helper PCs)</li>
+      <li>Coordinator + curl playbook, then swap the worker's config from stub to real</li>
+      <li>Add-on: client.py + submit operator first, panel polish second</li>
+      <li>Dashboard + hardening items, one checklist row at a time</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ================================================================ -->
+<section id="later">
+  <div class="wrap">
+    <div class="sec-label">11 — Scope</div>
+    <h2>Explicitly out of scope for v1</h2>
+    <p>Written down so neither you nor the AI drifts into building them early:</p>
+    <ul>
+      <li><strong>Auto-discovery</strong> (mDNS/UDP broadcast) — config file IPs are fine for three machines.</li>
+      <li><strong>Frame chunking / tile splitting</strong> — one frame per assignment until per-frame overhead is measurably the bottleneck.</li>
+      <li><strong>EXR / multilayer / video output</strong> — PNG only; the format field exists in the schema so this is additive later.</li>
+      <li><strong>Worker as a Tauri/desktop app</strong> — the daemon plus the web dashboard covers observability.</li>
+      <li><strong>Multi-user auth, HTTPS, internet exposure</strong> — this farm lives and dies on the LAN.</li>
+      <li><strong>Linked-library bundling</strong> — v1 detects and refuses; v2 can collect and rewrite paths.</li>
+      <li><strong>Priority queues / multiple concurrent jobs racing</strong> — jobs are FIFO by creation time; that's the <code>ORDER BY</code> in the claim query and it's enough.</li>
+    </ul>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">farmhand · build plan v1.0 · pending → rendering → done</div>
+</footer>
+
+</body>
+</html>
