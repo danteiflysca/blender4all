@@ -113,13 +113,6 @@ class FARMHAND_OT_submit(bpy.types.Operator):
             self.report({"ERROR"}, "Save the .blend file before submitting it to Farmhand.")
             scene.farmhand_error = "Save the .blend file before submitting."
             return {"CANCELLED"}
-        if shared_storage and bpy.data.is_dirty:
-            try:
-                bpy.ops.wm.save_as_mainfile(filepath=bpy.data.filepath)
-            except RuntimeError as exc:
-                scene.farmhand_error = f"Could not save the shared scene: {exc}"
-                self.report({"ERROR"}, scene.farmhand_error)
-                return {"CANCELLED"}
         scene.farmhand_error = ""
         try:
             client = _client(context)

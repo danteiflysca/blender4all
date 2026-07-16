@@ -157,12 +157,12 @@ def test_submit_job_by_path_sends_only_params(coordinator):
     assert b'name="blend_file"' not in body
 
 
-def test_shared_storage_saves_dirty_scene_instead_of_blocking_submission():
+def test_shared_storage_does_not_gate_submission_on_blender_dirty_state():
     source = (ROOT / "addon/farmhand_submit/operators.py").read_text()
     execute = source[source.index("    def execute(self, context):") :]
 
-    assert "if shared_storage and bpy.data.is_dirty:" in execute
-    assert "bpy.ops.wm.save_as_mainfile(filepath=bpy.data.filepath)" in execute
+    assert "bpy.data.is_dirty" not in execute
+    assert "bpy.ops.wm.save_as_mainfile(filepath=bpy.data.filepath)" not in execute
     assert "Save your latest changes before submitting by shared path." not in execute
 
 
