@@ -18,6 +18,8 @@ from addon.farmhand_submit.client import (
     sha256_file,
 )
 
+ROOT = Path(__file__).resolve().parents[1]
+
 
 def test_encode_multipart_has_contract_names_and_crlf():
     body = encode_multipart(
@@ -153,6 +155,13 @@ def test_submit_job_by_path_sends_only_params(coordinator):
     assert headers["Content-Type"].startswith("multipart/form-data; boundary=farmhand-")
     assert b'"blend_path":"/Volumes/renders/shot42.blend"' in body
     assert b'name="blend_file"' not in body
+
+
+def test_shared_storage_checks_dirty_state_before_writing_scene_status():
+    source = (ROOT / "addon/farmhand_submit/operators.py").read_text()
+    execute = source[source.index("    def execute(self, context):") :]
+
+    assert execute.index("bpy.data.is_dirty") < execute.index('scene.farmhand_error = ""')
 
 
 def test_cancel_escapes_job_id_and_uses_token(coordinator):

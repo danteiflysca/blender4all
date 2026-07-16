@@ -107,6 +107,12 @@ class FARMHAND_OT_submit(bpy.types.Operator):
 
     def execute(self, context):
         scene = context.scene
+        preferences = _preferences(context)
+        shared_storage = bool(preferences and preferences.shared_storage)
+        if shared_storage and bpy.data.is_saved and bpy.data.is_dirty:
+            scene.farmhand_error = "Save your latest changes before submitting by shared path."
+            self.report({"ERROR"}, scene.farmhand_error)
+            return {"CANCELLED"}
         scene.farmhand_error = ""
         if not bpy.data.is_saved:
             self.report({"ERROR"}, "Save the .blend file before submitting it to Farmhand.")
@@ -128,16 +134,10 @@ class FARMHAND_OT_submit(bpy.types.Operator):
             self.report({"ERROR"}, scene.farmhand_error)
             return {"CANCELLED"}
 
-        preferences = _preferences(context)
-        shared_storage = bool(preferences and preferences.shared_storage)
         self._temp_path = ""
         if shared_storage:
             # Workers open the saved file straight off shared storage; textures and
             # linked assets must also resolve there.
-            if bpy.data.is_dirty:
-                scene.farmhand_error = "Save your latest changes before submitting by shared path."
-                self.report({"ERROR"}, scene.farmhand_error)
-                return {"CANCELLED"}
             shared_path = bpy.data.filepath
         else:
             try:
