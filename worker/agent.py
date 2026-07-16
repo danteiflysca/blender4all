@@ -33,6 +33,19 @@ class Config:
     work_dir: Path
     poll_interval: float = 10
     gpu: str = "NONE"
+    shared_path_from: str = ""
+    shared_path_to: str = ""
+
+    def map_shared_path(self, path: str) -> str:
+        source = self.shared_path_from.rstrip("/\\")
+        if not source:
+            return path
+        if path == source:
+            return self.shared_path_to.rstrip("/\\")
+        prefix = source + "/"
+        if path.startswith(prefix):
+            return self.shared_path_to.rstrip("/\\") + "/" + path[len(prefix) :]
+        return path
 
 
 def load_config(path: Path) -> Config:
@@ -164,7 +177,7 @@ class Worker:
 
     def ensure_blend(self, work: dict[str, Any]) -> Path:
         if work.get("blend_path"):
-            shared = Path(work["blend_path"])
+            shared = Path(self.config.map_shared_path(work["blend_path"]))
             if not shared.is_file():
                 raise RuntimeError(f"shared blend not found on this worker: {shared}")
             return shared

@@ -108,6 +108,22 @@ def test_loads_toml_and_parses_blender_version(tmp_path):
     assert get_blender_version(loaded.blender_path, version_runner) == "4.5"
 
 
+def test_loads_and_applies_shared_path_mapping(tmp_path):
+    path = tmp_path / "config.toml"
+    path.write_text(
+        'coordinator_url="http://farm.test"\ntoken="secret"\nworker_id="w"\n'
+        f'blender_path="/opt/blender"\nwork_dir="{tmp_path}"\ngpu="NONE"\n'
+        'shared_path_from="/Volumes/AviatorPro"\n'
+        'shared_path_to="//Aviator-Pro-NAS/AviatorPro"\n'
+    )
+
+    loaded = load_config(path)
+
+    assert loaded.map_shared_path(
+        "/Volumes/AviatorPro/_2 Aviator Pro/scene.blend"
+    ) == "//Aviator-Pro-NAS/AviatorPro/_2 Aviator Pro/scene.blend"
+
+
 def test_blender_command_keeps_render_flags_before_frame(tmp_path):
     cfg = config(tmp_path)
 

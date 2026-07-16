@@ -93,11 +93,20 @@ blender_path = "/absolute/path/to/blender"
 work_dir = "/absolute/path/to/farmhand-worker-data"
 poll_interval = 10
 gpu = "OPTIX"
+
+# Optional when submitters and workers mount the same NAS differently:
+# shared_path_from = "/Volumes/AviatorPro"
+# shared_path_to = "//Aviator-Pro-NAS/AviatorPro"
 ```
 
 Use an absolute `blender_path` (including `blender.exe` on Windows), a unique,
 human-readable `worker_id`, and a writable `work_dir`. Start the worker from the
 repository root:
+
+For shared-storage jobs across macOS and Windows, set `shared_path_from` to the
+Mac mount prefix sent by the add-on and `shared_path_to` to the equivalent
+Windows UNC share. Omit both settings on workers where the submitted path
+already works.
 
 ```bash
 .venv/bin/python -m worker.agent --config worker/config.toml

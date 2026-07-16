@@ -5,3 +5,8 @@ blender_path = "C:/Program Files/Blender Foundation/Blender 4.5/blender.exe"
 work_dir = "C:/farmhand"
 poll_interval = 10
 gpu = "OPTIX" # OPTIX | CUDA | HIP | METAL | NONE
+
+# Optional: translate a shared path submitted by another operating system.
+# Windows example for a blend submitted from a Mac NAS mount:
+# shared_path_from = "/Volumes/AviatorPro"
+# shared_path_to = "//Aviator-Pro-NAS/AviatorPro"
