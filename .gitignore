@@ -17,3 +17,5 @@ farmhand_submit.zip
 *.blend
 *.png
 !docs/design/*.png
+.claude/
+farm-*.log
