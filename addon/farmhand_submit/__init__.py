@@ -3,7 +3,7 @@
 bl_info = {
     "name": "Farmhand Submit",
     "author": "Farmhand",
-    "version": (0, 1, 1),
+    "version": (0, 1, 2),
     "blender": (4, 2, 0),
     "location": "3D Viewport > Sidebar > Farmhand",
     "description": "Pack and submit Blender scenes to a Farmhand render coordinator",
@@ -80,8 +80,6 @@ def register() -> None:
     scene.farmhand_progress = FloatProperty(
         name="Progress", default=0.0, min=0.0, max=1.0, subtype="FACTOR"
     )
-    for current_scene in bpy.data.scenes:
-        current_scene.farmhand_error = ""
 
 
 def unregister() -> None:

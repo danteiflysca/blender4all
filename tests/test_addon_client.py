@@ -166,6 +166,13 @@ def test_shared_storage_does_not_gate_submission_on_blender_dirty_state():
     assert "Save your latest changes before submitting by shared path." not in execute
 
 
+def test_addon_registration_does_not_read_restricted_blender_data():
+    source = (ROOT / "addon/farmhand_submit/__init__.py").read_text()
+    register = source[source.index("def register()") : source.index("def unregister()")]
+
+    assert "bpy.data" not in register
+
+
 def test_cancel_escapes_job_id_and_uses_token(coordinator):
     FarmhandClient(coordinator, "secret").cancel_job("id/with space")
     path, headers, body = _Handler.requests[0]
