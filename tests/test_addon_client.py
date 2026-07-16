@@ -132,6 +132,29 @@ def test_submit_job_sends_api_v1_multipart(coordinator, tmp_path):
     assert b"packed blend bytes" in body
 
 
+def test_submit_job_by_path_sends_only_params(coordinator):
+    params = {
+        "name": "NAS Scene",
+        "frame_start": 1,
+        "frame_end": 10,
+        "frame_step": 1,
+        "output_format": "PNG",
+        "engine": "CYCLES",
+        "blender_version": "4.5",
+    }
+
+    result = FarmhandClient(coordinator, "secret").submit_job_by_path(
+        "/Volumes/renders/shot42.blend", params
+    )
+
+    assert result == {"job_id": "abc123"}
+    path, headers, body = _Handler.requests[0]
+    assert path == "/jobs"
+    assert headers["Content-Type"].startswith("multipart/form-data; boundary=farmhand-")
+    assert b'"blend_path":"/Volumes/renders/shot42.blend"' in body
+    assert b'name="blend_file"' not in body
+
+
 def test_cancel_escapes_job_id_and_uses_token(coordinator):
     FarmhandClient(coordinator, "secret").cancel_job("id/with space")
     path, headers, body = _Handler.requests[0]

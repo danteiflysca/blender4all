@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import os
+import platform
 import re
 import shutil
 import subprocess
@@ -42,6 +43,63 @@ def load_config(path: Path) -> Config:
     if values["gpu"] not in GPU_TYPES:
         raise ValueError(f"gpu must be one of: {', '.join(sorted(GPU_TYPES))}")
     return Config(**values)
+
+
+def detect_hardware(runner: Callable[..., Any] = subprocess.run) -> dict[str, str]:
+    """Best-effort OS/CPU/GPU names for the dashboard. Empty strings on failure."""
+
+    def run(command: list[str]) -> str:
+        result = runner(command, capture_output=True, text=True, timeout=15)
+        return result.stdout if isinstance(result.stdout, str) else ""
+
+    system = platform.system()
+    info = {
+        "os": f"{system} {platform.release()}".strip(),
+        "cpu": platform.processor() or platform.machine(),
+        "gpu": "",
+    }
+    try:
+        if system == "Darwin":
+            info["cpu"] = run(["sysctl", "-n", "machdep.cpu.brand_string"]).strip() or info["cpu"]
+            lines = run(["system_profiler", "SPDisplaysDataType"]).splitlines()
+            info["gpu"] = next(
+                (line.split(":", 1)[1].strip() for line in lines if "Chipset Model" in line), ""
+            )
+        elif system == "Windows":
+            lines = [
+                line.strip()
+                for line in run(
+                    [
+                        "powershell",
+                        "-NoProfile",
+                        "-Command",
+                        "(Get-CimInstance Win32_Processor).Name; "
+                        "(Get-CimInstance Win32_VideoController).Name",
+                    ]
+                ).splitlines()
+                if line.strip()
+            ]
+            if lines:
+                info["cpu"] = lines[0]
+                info["gpu"] = ", ".join(lines[1:])
+        elif system == "Linux":
+            cpuinfo = Path("/proc/cpuinfo").read_text().splitlines()
+            info["cpu"] = next(
+                (line.split(":", 1)[1].strip() for line in cpuinfo if "model name" in line),
+                info["cpu"],
+            )
+            lines = run(["lspci"]).splitlines()
+            info["gpu"] = next(
+                (
+                    line.split(":", 2)[-1].strip()
+                    for line in lines
+                    if "VGA" in line or "3D controller" in line
+                ),
+                "",
+            )
+    except Exception:  # ponytail: dashboard cosmetics; never block rendering on detection
+        pass
+    return info
 
 
 def get_blender_version(path: str, runner: Callable[..., Any] = subprocess.run) -> str:
@@ -102,8 +160,14 @@ class Worker:
             timeout=60,
         )
         self.blender_version = get_blender_version(config.blender_path, runner)
+        self.hardware = detect_hardware(runner)
 
     def ensure_blend(self, work: dict[str, Any]) -> Path:
+        if work.get("blend_path"):
+            shared = Path(work["blend_path"])
+            if not shared.is_file():
+                raise RuntimeError(f"shared blend not found on this worker: {shared}")
+            return shared
         cache = self.config.work_dir / "cache"
         cache.mkdir(exist_ok=True)
         expected = work["blend_sha256"].lower()
@@ -234,6 +298,7 @@ class Worker:
                     params={
                         "worker_id": self.config.worker_id,
                         "blender_version": self.blender_version,
+                        **self.hardware,
                     },
                 )
                 if response.status_code == 204:

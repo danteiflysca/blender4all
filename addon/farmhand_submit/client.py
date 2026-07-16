@@ -148,9 +148,8 @@ class FarmhandClient:
         except (UnicodeError, json.JSONDecodeError):
             raise FarmhandError("Coordinator returned an invalid JSON response.") from None
 
-    def submit_job(
-        self, blend_path: str | os.PathLike[str], params: Mapping[str, Any]
-    ) -> dict[str, Any]:
+    @staticmethod
+    def _check_params(params: Mapping[str, Any]) -> None:
         required = {
             "name",
             "frame_start",
@@ -163,6 +162,11 @@ class FarmhandClient:
         missing = sorted(required.difference(params))
         if missing:
             raise FarmhandError(f"Missing job parameters: {', '.join(missing)}")
+
+    def submit_job(
+        self, blend_path: str | os.PathLike[str], params: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        self._check_params(params)
         path = Path(blend_path)
         if not path.is_file():
             raise FarmhandError(f"Blend copy does not exist: {path}")
@@ -187,6 +191,33 @@ class FarmhandClient:
         )
         if not isinstance(result, dict) or not result.get("job_id"):
             raise FarmhandError("Coordinator accepted the upload but returned no job ID.")
+        return result
+
+    def submit_job_by_path(
+        self, blend_path: str | os.PathLike[str], params: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        """Submit a job whose .blend lives on storage shared with the workers.
+
+        Only the path is sent; nothing is uploaded. The path must resolve on
+        every worker machine.
+        """
+        self._check_params(params)
+        payload = dict(params, blend_path=str(blend_path))
+        params_json = json.dumps(payload, separators=(",", ":"), sort_keys=True)
+        seed = os.urandom(32) + params_json.encode("utf-8")
+        boundary = "farmhand-" + hashlib.sha256(seed).hexdigest()
+        body = encode_multipart({"params": params_json}, {}, boundary=boundary)
+        result = self._request(
+            "POST",
+            "/jobs",
+            data=body,
+            headers={
+                "Content-Type": f"multipart/form-data; boundary={boundary}",
+                "Content-Length": str(len(body)),
+            },
+        )
+        if not isinstance(result, dict) or not result.get("job_id"):
+            raise FarmhandError("Coordinator accepted the job but returned no job ID.")
         return result
 
     def list_jobs(self) -> Any:

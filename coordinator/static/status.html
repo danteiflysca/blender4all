@@ -4,122 +4,152 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Farmhand — Render farm</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {
       color-scheme: dark;
-      --bg: #0b0c0e; --panel: #111316; --panel-2: #15181c;
-      --border: #2a2f36; --border-soft: #1d2126;
-      --text: #e7e9ec; --muted: #9aa1ab; --faint: #6b7280;
-      --accent: #f5792a; --done: #3fb950; --failed: #f85149;
-      --pending: #3a4048; --sans: Inter, Geist, system-ui, sans-serif;
-      --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      --bg: #010102; --panel: #0f1011; --panel-hover: #141516;
+      --border: #23252a; --border-soft: #18191a; --border-strong: #34343a;
+      --text: #f7f8f8; --text-2: #d0d6e0; --muted: #8a8f98; --faint: #62666d;
+      --accent: #5e6ad2; --accent-bright: #828fff;
+      --green: #27a644; --green-text: #4cb782; --red: #eb5757;
+      --sans: Inter, -apple-system, system-ui, sans-serif;
+      --mono: "JetBrains Mono", ui-monospace, monospace;
     }
     * { box-sizing: border-box; }
-    html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text); }
-    body { font: 14px/1.5 var(--sans); }
-    button, input { font: 500 13px/1 var(--sans); }
-    button { color: var(--text); background: transparent; border: 1px solid var(--border); border-radius: 5px; cursor: pointer; }
-    button:hover { border-color: #59616c; background: var(--panel-2); }
+    html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); }
+    body { font: 14px/1.5 var(--sans); letter-spacing: -.05px; overflow: hidden; }
+    h1, h2, h3, p { margin: 0; }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    button, input { font: 500 13px/1 var(--sans); letter-spacing: inherit; }
+    button { color: var(--text); background: var(--panel); border: 1px solid var(--border-strong); border-radius: 8px; cursor: pointer; }
+    button:hover { background: var(--panel-hover); border-color: #3e3e44; }
     button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     button:disabled { opacity: .45; cursor: not-allowed; }
-    .app { display: grid; grid-template: 56px minmax(0, 1fr) / 304px minmax(0, 1fr); min-height: 100vh; }
-    header { grid-column: 1 / -1; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 18px; gap: 22px; }
-    .brand { display: flex; align-items: center; gap: 10px; font-size: 22px; font-weight: 650; letter-spacing: -.03em; }
-    .brand-mark { width: 26px; height: 26px; color: var(--accent); }
-    .live { border-left: 1px solid var(--border); padding-left: 22px; color: var(--muted); font-size: 12px; }
-    .live::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; background: var(--done); }
-    .settings { width: 34px; height: 34px; margin-left: auto; display: grid; place-items: center; font-size: 17px; }
-    aside { border-right: 1px solid var(--border); padding: 18px 12px; min-width: 0; overflow: auto; }
-    .rail-title { display: flex; align-items: center; justify-content: space-between; padding: 0 6px 12px; }
-    h2, h3, p { margin: 0; }
-    .rail-title h2 { font-size: 15px; }
-    .job-list { display: grid; gap: 2px; }
-    .job { width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--border-soft); padding: 13px 10px 13px 18px; border-radius: 0; position: relative; }
-    .job[aria-current="true"] { background: var(--panel-2); }
-    .job[aria-current="true"]::before { content: ""; position: absolute; left: 0; top: 7px; bottom: 7px; width: 3px; background: var(--accent); border-radius: 2px; }
-    .job-top, .job-meta { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-    .job-name { font: 500 13px var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .job-meta { color: var(--faint); font: 11px var(--mono); margin-top: 7px; }
-    .state { font: 600 10px var(--mono); text-transform: capitalize; }
-    .state.active { color: var(--accent); } .state.complete { color: var(--done); }
-    .state.cancelled { color: var(--failed); }
-    .empty { padding: 28px 10px; color: var(--faint); text-align: center; }
-    main { min-width: 0; padding: 22px 26px 28px; overflow: auto; }
-    .job-head { display: grid; grid-template-columns: minmax(250px, 1fr) auto auto auto; align-items: center; gap: 28px; margin-bottom: 16px; }
-    .job-head h1 { margin: 0 0 5px; font: 600 24px/1.2 var(--mono); letter-spacing: -.025em; }
-    .job-range, .metric-label { color: var(--muted); font: 11px var(--mono); }
-    .metric { min-width: 90px; }
-    .metric-value { font: 500 16px var(--mono); margin-bottom: 3px; }
-    .cancel { height: 36px; padding: 0 18px; border-color: var(--accent); color: var(--accent); }
-    .progress-track { height: 7px; background: #252a30; margin-bottom: 18px; overflow: hidden; }
-    .progress-fill { height: 100%; width: 0; background: var(--accent); transition: width .25s ease; }
-    .panel { border: 1px solid var(--border); background: rgba(17, 19, 22, .62); }
-    .frame-panel { padding: 14px 16px 10px; }
-    .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 12px; }
-    .panel-head h2, .panel-title { font-size: 14px; font-weight: 600; }
-    .legend { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; color: var(--muted); font: 10px var(--mono); }
-    .legend i { width: 9px; height: 9px; display: inline-block; margin-right: 6px; border-radius: 2px; }
-    .frame-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(39px, 1fr)); gap: 4px; }
-    .frame { height: 27px; display: grid; place-items: center; border-radius: 2px; font: 9px var(--mono); color: #f1f3f5; background: var(--pending); border: 0; }
-    .frame.done { background: #2f7d29; } .frame.rendering { background: var(--accent); }
-    .frame.failed { background: var(--failed); } .frame.selected { outline: 2px solid white; outline-offset: 1px; }
-    .frame-foot { display: flex; justify-content: space-between; align-items: center; color: var(--faint); font: 10px var(--mono); margin-top: 10px; }
-    .download { padding: 8px 12px; }
-    .lower { display: grid; grid-template-columns: minmax(360px, .9fr) minmax(440px, 1.1fr); gap: 10px; margin-top: 10px; }
-    .lower .panel { min-height: 235px; padding: 13px; }
-    .table-wrap { margin-top: 10px; border: 1px solid var(--border); overflow-x: auto; }
-    table { border-collapse: collapse; width: 100%; font: 10px var(--mono); }
-    th { text-align: left; color: var(--muted); background: var(--panel-2); font-weight: 500; }
-    th, td { padding: 8px 10px; border-bottom: 1px solid var(--border-soft); }
-    tr:last-child td { border-bottom: 0; }
-    tr.stale { opacity: .4; }
-    .failure { margin-top: 10px; border: 1px solid var(--border); display: grid; grid-template-columns: 72px minmax(0, 1fr); min-height: 170px; }
-    .failure-list { border-right: 1px solid var(--border); }
-    .failure-list button { width: 100%; border: 0; border-radius: 0; padding: 12px 8px; color: var(--failed); font: 500 11px var(--mono); }
-    .failure-detail { padding: 12px; min-width: 0; display: flex; flex-direction: column; }
-    pre { flex: 1; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; color: #c8cdd3; font: 10px/1.55 var(--mono); max-height: 120px; overflow: auto; }
-    .requeue { align-self: end; padding: 8px 18px; color: var(--accent); border-color: var(--accent); margin-top: 8px; }
-    .connection { display: none; max-width: 470px; margin: 100px auto; padding: 26px; }
-    .connection h1 { font-size: 21px; margin: 0 0 8px; }
-    .connection p { color: var(--muted); margin-bottom: 18px; }
+
+    .app { display: grid; grid-template: 56px minmax(0, 1fr) / 280px minmax(0, 1fr); height: 100vh; }
+    header { grid-column: 1 / -1; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 20px; gap: 20px; }
+    .brand { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600; letter-spacing: -.3px; }
+    .brand-mark { width: 22px; height: 22px; border-radius: 6px; background: var(--accent); display: grid; place-items: center; font-weight: 600; font-size: 12px; color: #fff; }
+    .live { border-left: 1px solid var(--border); padding-left: 20px; color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 8px; }
+    .live::before { content: ""; width: 7px; height: 7px; border-radius: 9999px; background: var(--green); flex: none; }
+    .live b { color: var(--text-2); font-weight: 500; }
+    .settings { width: 32px; height: 32px; margin-left: auto; display: grid; place-items: center; font-size: 14px; color: var(--muted); border-color: var(--border); }
+    .settings:hover { color: var(--text); }
+
+    aside { border-right: 1px solid var(--border); display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+    .rail-title { display: flex; align-items: center; justify-content: space-between; padding: 16px 16px 12px; font-weight: 600; font-size: 14px; letter-spacing: -.2px; }
+    .rail-title span { color: var(--faint); font: 12px var(--mono); }
+    .job-list { flex: 1; overflow-y: auto; padding: 0 8px 8px; display: flex; flex-direction: column; gap: 2px; }
+    .job { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; width: 100%; text-align: left; padding: 10px; border-radius: 8px; background: transparent; border: 1px solid transparent; }
+    .job:hover { background: var(--panel-hover); border-color: transparent; }
+    .job[aria-current="true"] { background: var(--panel-hover); border-color: var(--border-strong); }
+    .job-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+    .job-top { display: flex; align-items: center; gap: 8px; }
+    .job-dot { width: 7px; height: 7px; border-radius: 9999px; flex: none; background: var(--faint); }
+    .job-name { font-weight: 500; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .job-range { font-size: 12px; color: var(--faint); padding-left: 15px; }
+    .job-side { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex: none; }
+    .job-count { font: 11px var(--mono); color: var(--faint); }
+    .badge { font-size: 11px; font-weight: 500; border-radius: 9999px; padding: 2px 8px; text-transform: capitalize; }
+    .active .job-dot { background: var(--accent); }
+    .active .badge { color: var(--accent-bright); background: rgba(94,106,210,.15); }
+    .complete .job-dot { background: var(--green); }
+    .complete .badge { color: var(--green-text); background: rgba(39,166,68,.12); }
+    .cancelled .job-dot { background: var(--red); }
+    .cancelled .badge { color: var(--red); background: rgba(235,87,87,.1); }
+    .pending .badge { color: var(--muted); background: var(--border-soft); }
+    .empty { padding: 28px 10px; color: var(--faint); text-align: center; font-size: 13px; }
+
+    main { min-width: 0; padding: 24px 28px; overflow: auto; display: flex; flex-direction: column; gap: 20px; }
+    .job-head { display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+    .job-head h1 { font-size: 24px; font-weight: 600; letter-spacing: -.6px; line-height: 1.2; margin-bottom: 4px; }
+    .head-range { font-size: 13px; color: var(--muted); }
+    .metrics { display: flex; align-items: center; gap: 32px; flex: none; }
+    .metric { display: flex; flex-direction: column; gap: 2px; align-items: flex-end; }
+    .metric-value { font: 500 18px var(--mono); }
+    .metric-label { font-size: 12px; color: var(--faint); }
+    .metric-divider { width: 1px; height: 32px; background: var(--border); }
+    .cancel { padding: 8px 14px; font-size: 14px; }
+    .progress-row { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
+    .progress-track { flex: 1; height: 6px; border-radius: 9999px; background: var(--border-soft); overflow: hidden; }
+    .progress-fill { height: 100%; width: 0; border-radius: 9999px; background: var(--accent); transition: width .25s ease; }
+    .progress-pct { font: 13px var(--mono); color: var(--text-2); flex: none; }
+
+    .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
+    .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+    .panel-head h2 { font-size: 15px; font-weight: 600; letter-spacing: -.2px; }
+    .legend { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; color: var(--muted); font-size: 12px; }
+    .legend span { display: flex; align-items: center; gap: 6px; }
+    .legend i { width: 8px; height: 8px; border-radius: 2px; }
+    .frame-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(42px, 1fr)); gap: 4px; }
+    .frame { display: grid; place-items: center; min-width: 0; overflow: hidden; height: 26px; padding: 0; border-radius: 4px; font: 10px var(--mono); cursor: default; background: var(--panel-hover); border: 1px solid var(--border); color: var(--faint); }
+    .frame:hover { background: var(--panel-hover); }
+    .frame.done { background: rgba(39,166,68,.14); border-color: rgba(39,166,68,.25); color: var(--green-text); }
+    .frame.rendering { background: rgba(94,106,210,.22); border-color: rgba(130,143,255,.45); color: var(--accent-bright); }
+    .frame.failed { background: rgba(235,87,87,.16); border-color: rgba(235,87,87,.4); color: var(--red); cursor: pointer; }
+    .frame-foot { display: flex; justify-content: space-between; align-items: center; }
+    .frame-range { font: 12px var(--mono); color: var(--faint); }
+    .download { padding: 7px 14px; font-size: 13px; }
+
+    .lower { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 20px; align-items: start; }
+    .lower .panel { min-width: 0; }
+    .worker-table { display: flex; flex-direction: column; overflow-x: auto; }
+    .worker-row { display: grid; grid-template-columns: minmax(96px, 1.2fr) minmax(150px, 1.6fr) minmax(60px, .8fr) minmax(90px, 1fr) minmax(80px, 1fr) minmax(80px, 1fr); gap: 12px; min-width: 600px; padding: 9px 0; border-bottom: 1px solid var(--border-soft); font: 13px var(--mono); color: var(--text-2); }
+    .worker-row.head { padding: 8px 0; border-bottom: 1px solid var(--border); font: 500 12px var(--sans); color: var(--muted); }
+    .worker-row.stale { color: var(--faint); }
+    .worker-row span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .worker-foot { font-size: 12px; color: var(--faint); }
+
+    .fail-badge { font-size: 11px; font-weight: 500; color: var(--red); background: rgba(235,87,87,.12); border-radius: 9999px; padding: 2px 8px; }
+    .failure { display: flex; gap: 16px; align-items: flex-start; }
+    .failure-list { display: flex; flex-direction: column; gap: 4px; flex: none; }
+    .failure-list button { border: 0; background: none; padding: 2px 4px; color: var(--red); font: 500 13px var(--mono); text-align: left; border-radius: 4px; opacity: .55; }
+    .failure-list button[aria-current="true"] { opacity: 1; }
+    .failure-list button:hover { background: none; opacity: 1; }
+    pre { margin: 0; flex: 1; min-width: 0; overflow: auto; max-height: 220px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; font: 12px/1.6 var(--mono); color: var(--muted); white-space: pre; }
+    .failure-actions { display: flex; justify-content: flex-end; }
+    .requeue { background: var(--accent); border: 0; color: #fff; padding: 8px 14px; font-size: 14px; }
+    .requeue:hover { background: var(--accent-bright); }
+
+    .notice { margin-top: 14px; padding: 10px 14px; border-radius: 8px; font-size: 13px; color: #f2c94c; background: rgba(242,201,76,.08); border: 1px solid rgba(242,201,76,.3); }
+
+    .connection { display: none; max-width: 440px; margin: 100px auto; width: 100%; }
+    .connection h1 { font-size: 20px; font-weight: 600; letter-spacing: -.4px; margin-bottom: 6px; }
+    .connection p { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
     .connection form { display: flex; gap: 8px; }
-    .connection input { flex: 1; min-width: 0; background: var(--panel-2); color: var(--text); border: 1px solid var(--border); padding: 11px; border-radius: 5px; }
-    .connection button { padding: 0 16px; border-color: var(--accent); color: var(--accent); }
-    .error { color: var(--failed); font-size: 12px; margin-top: 10px; min-height: 18px; }
-    @media (max-width: 980px) {
-      .app { grid-template-columns: 230px minmax(0, 1fr); }
-      .lower { grid-template-columns: 1fr; }
-      .job-head { grid-template-columns: 1fr auto auto; }
-      .cancel { grid-column: 1 / -1; justify-self: end; }
-    }
+    .connection input { flex: 1; min-width: 0; background: var(--bg); color: var(--text); border: 1px solid var(--border); padding: 10px 12px; border-radius: 8px; }
+    .connection .connect { background: var(--accent); border: 0; color: #fff; padding: 0 16px; }
+    .connection .connect:hover { background: var(--accent-bright); }
+    .error { color: var(--red); font-size: 12px; margin-top: 10px; min-height: 18px; }
+
+    @media (max-width: 1100px) { .lower { grid-template-columns: 1fr; } }
+    @media (max-width: 900px) { .app { grid-template-columns: 230px minmax(0, 1fr); } .metrics { gap: 20px; } }
     @media (max-width: 700px) {
-      .app { display: block; }
-      header { height: 56px; position: sticky; top: 0; z-index: 2; background: var(--bg); }
-      aside { border-right: 0; border-bottom: 1px solid var(--border); max-height: 210px; }
+      body { overflow: auto; }
+      .app { display: block; height: auto; }
+      header { position: sticky; top: 0; z-index: 2; background: var(--bg); height: 56px; }
+      aside { border-right: 0; border-bottom: 1px solid var(--border); max-height: 240px; }
       main { padding: 18px 14px; }
-      .job-head { grid-template-columns: 1fr 1fr; gap: 14px; }
-      .job-head > :first-child { grid-column: 1 / -1; }
-      .cancel { grid-column: auto; justify-self: stretch; }
-      .lower { display: block; }
-      .lower .panel + .panel { margin-top: 10px; }
       .legend { display: none; }
     }
-    @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; } }
+    @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
   </style>
 </head>
 <body>
   <div class="app">
     <header>
-      <div class="brand">
-        <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><path fill="currentColor" d="M4 16h8l-5-5 3-3 6 6a9 9 0 1 1-1.7 10H19a5 5 0 1 0 0-5H4zm9-13 6 7-3 3-7-7z"/></svg>
-        Farmhand
-      </div>
-      <div class="live" id="liveLabel">Connected to farm</div>
+      <div class="brand"><span class="brand-mark">F</span>Farmhand</div>
+      <div class="live" id="liveLabel"><b>Live</b>&nbsp;Connected to farm</div>
       <button class="settings" id="settingsButton" aria-label="Change farm token">⚙</button>
     </header>
 
     <aside id="rail">
-      <div class="rail-title"><h2>Render jobs</h2><span id="jobCount">0</span></div>
+      <div class="rail-title">Render jobs<span id="jobCount">0</span></div>
       <div class="job-list" id="jobList"></div>
     </aside>
 
@@ -127,33 +157,54 @@
       <section class="connection panel" id="connection">
         <h1>Connect to Farmhand</h1>
         <p>Enter the shared LAN token configured on the coordinator.</p>
-        <form id="tokenForm"><input id="tokenInput" type="password" autocomplete="current-password" aria-label="Farm token"><button>Connect</button></form>
+        <form id="tokenForm"><input id="tokenInput" type="password" autocomplete="current-password" aria-label="Farm token"><button class="connect">Connect</button></form>
         <div class="error" id="connectionError"></div>
       </section>
+
       <section id="dashboard" hidden>
         <div class="job-head">
-          <div><h1 id="jobName">—</h1><div class="job-range" id="jobRange"></div></div>
-          <div class="metric"><div class="metric-value" id="jobProgress">0 / 0</div><div class="metric-label">Done / Total</div></div>
-          <div class="metric"><div class="metric-value" id="eta">—</div><div class="metric-label">ETA</div></div>
-          <button class="cancel" id="cancelButton">Cancel job</button>
+          <div><h1 id="jobName">—</h1><div class="head-range" id="jobRange"></div></div>
+          <div class="metrics">
+            <div class="metric"><div class="metric-value" id="jobProgress">0 / 0</div><div class="metric-label">Done / Total</div></div>
+            <div class="metric-divider"></div>
+            <div class="metric"><div class="metric-value" id="eta">—</div><div class="metric-label">ETA</div></div>
+            <button class="cancel" id="cancelButton">Cancel job</button>
+          </div>
         </div>
-        <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+        <div class="progress-row">
+          <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+          <span class="progress-pct" id="progressPct">0%</span>
+        </div>
+        <div class="notice" id="jobNotice" hidden></div>
 
-        <section class="panel frame-panel">
+        <section class="panel" style="margin-top:20px">
           <div class="panel-head"><h2>Frame progress</h2><div class="legend">
-            <span><i style="background:var(--pending)"></i>Pending</span><span><i style="background:var(--accent)"></i>Rendering</span><span><i style="background:var(--done)"></i>Done</span><span><i style="background:var(--failed)"></i>Failed</span>
+            <span><i style="background:var(--border-soft);border:1px solid var(--border-strong)"></i>Pending</span>
+            <span><i style="background:var(--accent)"></i>Rendering</span>
+            <span><i style="background:var(--green)"></i>Done</span>
+            <span><i style="background:var(--red)"></i>Failed</span>
           </div></div>
           <div class="frame-grid" id="frameGrid"></div>
-          <div class="frame-foot"><span id="frameRange"></span><button class="download" id="downloadButton">⇩&nbsp; Download frames</button></div>
+          <div class="frame-foot"><span class="frame-range" id="frameRange"></span><button class="download" id="downloadButton">↓&nbsp; Download frames</button></div>
         </section>
 
-        <div class="lower">
-          <section class="panel"><h2 class="panel-title">Workers</h2><div class="table-wrap"><table>
-            <thead><tr><th>Worker ID</th><th>Blender version</th><th>Current frame</th><th>Last seen</th></tr></thead><tbody id="workerRows"></tbody>
-          </table></div></section>
-          <section class="panel"><h2 class="panel-title">Failed frames</h2><div class="failure" id="failurePanel">
-            <div class="failure-list" id="failureList"></div><div class="failure-detail"><pre id="failureText">No failed frames.</pre><button class="requeue" id="requeueButton" hidden>Requeue</button></div>
-          </div></section>
+        <div class="lower" style="margin-top:20px">
+          <section class="panel">
+            <div class="panel-head"><h2>Workers</h2></div>
+            <div class="worker-table">
+              <div class="worker-row head"><span>Worker ID</span><span>Hardware</span><span>Blender</span><span>Current frame</span><span>Frames done</span><span>Last seen</span></div>
+              <div id="workerRows" style="display:contents"></div>
+            </div>
+            <span class="worker-foot" id="workerFoot"></span>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>Failed frames</h2><span class="fail-badge" id="failBadge" hidden></span></div>
+            <div class="failure">
+              <div class="failure-list" id="failureList"></div>
+              <pre id="failureText">No failed frames.</pre>
+            </div>
+            <div class="failure-actions"><button class="requeue" id="requeueButton" hidden>Requeue</button></div>
+          </section>
         </div>
       </section>
     </main>
@@ -167,7 +218,6 @@
       if (!response.ok) { const body = await response.json().catch(() => ({})); throw new Error(body.detail || `Request failed (${response.status})`); }
       return response.status === 204 ? null : response;
     };
-    const escapeText = (value) => String(value ?? '');
     const formatEta = (seconds) => {
       if (seconds == null) return 'Calculating…';
       seconds = Math.max(0, Math.round(seconds));
@@ -182,43 +232,66 @@
     function renderJobs() {
       $('jobCount').textContent = state.jobs.length;
       $('jobList').replaceChildren(...state.jobs.map(job => {
-        const button = document.createElement('button'); button.className = 'job'; button.dataset.jobId = job.id;
+        const button = document.createElement('button'); button.className = `job ${job.status}`; button.dataset.jobId = job.id;
         button.setAttribute('aria-current', String(job.id === state.selected));
+        const main = document.createElement('div'); main.className = 'job-main';
         const top = document.createElement('div'); top.className = 'job-top';
+        const dot = document.createElement('span'); dot.className = 'job-dot';
         const name = document.createElement('span'); name.className = 'job-name'; name.textContent = job.name;
-        const status = document.createElement('span'); status.className = `state ${job.status}`; status.textContent = job.status;
-        const meta = document.createElement('div'); meta.className = 'job-meta';
-        meta.innerHTML = `<span>Frames ${job.frame_start}–${job.frame_end}</span><span>${job.done} / ${job.total}</span>`;
-        top.append(name, status); button.append(top, meta); button.addEventListener('click', () => selectJob(job.id)); return button;
+        top.append(dot, name);
+        const range = document.createElement('span'); range.className = 'job-range'; range.textContent = `Frames ${job.frame_start}–${job.frame_end}`;
+        main.append(top, range);
+        const side = document.createElement('div'); side.className = 'job-side';
+        const badge = document.createElement('span'); badge.className = 'badge'; badge.textContent = job.status;
+        const count = document.createElement('span'); count.className = 'job-count'; count.textContent = `${job.done} / ${job.total}`;
+        side.append(badge, count);
+        button.append(main, side); button.addEventListener('click', () => selectJob(job.id)); return button;
       }));
       if (!state.jobs.length) { const empty = document.createElement('div'); empty.className = 'empty'; empty.textContent = 'No render jobs yet.'; $('jobList').append(empty); }
     }
     function renderJob() {
       const job = state.job; if (!job) return;
       const total = job.frames.length, done = job.counts.done;
-      $('jobName').textContent = job.name; $('jobRange').textContent = `Frames ${job.frame_start}–${job.frame_end}`;
+      const pct = total ? Math.round(done / total * 100) : 0;
+      $('jobName').textContent = job.name; $('jobRange').textContent = `Frames ${job.frame_start}–${job.frame_end} · Blender ${job.blender_version} · ${job.engine}`;
       $('jobProgress').textContent = `${done} / ${total}`; $('eta').textContent = formatEta(job.eta_seconds);
-      $('progressFill').style.width = `${total ? done / total * 100 : 0}%`;
+      $('progressFill').style.width = `${pct}%`; $('progressPct').textContent = `${pct}%`;
       $('cancelButton').disabled = job.status !== 'active';
       $('frameRange').textContent = `Frame range: ${job.frame_start}–${job.frame_end} (${total} total)`;
       $('downloadButton').disabled = done === 0;
       $('frameGrid').replaceChildren(...job.frames.map(item => {
         const square = document.createElement('button'); square.className = `frame ${item.state}`; square.textContent = item.frame;
-        square.title = `Frame ${item.frame}: ${item.state}`;
+        square.title = `Frame ${item.frame}: ${item.state}${item.worker_id ? ` · ${item.worker_id}` : ''}`;
         if (item.state === 'failed') square.addEventListener('click', () => selectFailure(item.frame));
         return square;
       }));
+      const majorMinor = (version) => String(version).match(/\d+\.\d+/)?.[0] ?? String(version);
+      const liveWorkers = job.workers.filter(worker => !worker.stale);
+      const needsWork = job.status === 'active' && (job.counts.pending > 0 || job.counts.rendering > 0);
+      let notice = '';
+      if (needsWork && !liveWorkers.length) notice = 'No workers are connected — start a worker agent to render this job.';
+      else if (needsWork && !liveWorkers.some(worker => majorMinor(worker.blender_version) === majorMinor(job.blender_version)))
+        notice = `Stalled: this job needs Blender ${majorMinor(job.blender_version)}, but the connected worker${liveWorkers.length === 1 ? ' runs' : 's run'} ${[...new Set(liveWorkers.map(worker => majorMinor(worker.blender_version)))].join(', ')}. Add a matching worker or re-submit from Blender ${[...new Set(liveWorkers.map(worker => majorMinor(worker.blender_version)))].join('/')}.`;
+      $('jobNotice').hidden = !notice; $('jobNotice').textContent = notice;
+      const stale = job.workers.filter(worker => worker.stale).length;
+      $('workerFoot').textContent = `${job.workers.length} worker${job.workers.length === 1 ? '' : 's'} total${stale ? ` · ${stale} stale` : ''}`;
       $('workerRows').replaceChildren(...job.workers.map(worker => {
-        const row = document.createElement('tr'); if (worker.stale) row.className = 'stale';
-        [worker.worker_id, worker.blender_version, worker.current_frame ?? 'Idle', `${worker.last_seen_seconds}s ago`].forEach(value => { const cell = document.createElement('td'); cell.textContent = value; row.append(cell); }); return row;
+        const row = document.createElement('div'); row.className = `worker-row${worker.stale ? ' stale' : ''}`;
+        [worker.worker_id, [worker.os, worker.cpu, worker.gpu].filter(Boolean).join(' · ') || '—', worker.blender_version, worker.current_frame ?? 'Idle', worker.frames_done ?? 0, `${worker.last_seen_seconds}s ago`].forEach(value => { const cell = document.createElement('span'); cell.textContent = value; cell.title = String(value); row.append(cell); }); return row;
       }));
       renderFailures();
     }
     function renderFailures() {
       const failures = state.job.frames.filter(frame => frame.state === 'failed');
-      $('failureList').replaceChildren(...failures.map(frame => { const button = document.createElement('button'); button.textContent = frame.frame; button.addEventListener('click', () => selectFailure(frame.frame)); return button; }));
-      if (!failures.length) { state.failedFrame = null; $('failureText').textContent = 'No failed frames.'; $('requeueButton').hidden = true; return; }
+      $('failBadge').hidden = !failures.length;
+      $('failBadge').textContent = `${failures.length} failure${failures.length === 1 ? '' : 's'}`;
+      if (!failures.length) { state.failedFrame = null; $('failureList').replaceChildren(); $('failureText').textContent = 'No failed frames.'; $('requeueButton').hidden = true; return; }
       if (!failures.some(frame => frame.frame === state.failedFrame)) state.failedFrame = failures[0].frame;
+      $('failureList').replaceChildren(...failures.map(frame => {
+        const button = document.createElement('button'); button.textContent = frame.frame;
+        button.setAttribute('aria-current', String(frame.frame === state.failedFrame));
+        button.addEventListener('click', () => selectFailure(frame.frame)); return button;
+      }));
       const selected = failures.find(frame => frame.frame === state.failedFrame);
       $('failureText').textContent = selected.stderr_tail || 'No error output was captured.'; $('requeueButton').hidden = false;
     }
@@ -228,7 +301,7 @@
         const response = await api('/jobs'); state.jobs = await response.json();
         if (!state.selected || !state.jobs.some(job => job.id === state.selected)) state.selected = state.jobs[0]?.id || null;
         renderJobs(); if (state.selected) await selectJob(state.selected, false); else { showDashboard(); $('dashboard').hidden = false; }
-        $('liveLabel').textContent = 'Connected to farm';
+        $('liveLabel').innerHTML = '<b>Live</b>&nbsp;Connected to farm';
       } catch (error) { showConnection(error.message); }
     }
     async function selectJob(jobId, rerenderJobs = true) {

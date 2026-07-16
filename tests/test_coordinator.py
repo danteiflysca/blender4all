@@ -74,6 +74,38 @@ def test_submit_streams_blend_and_creates_frame_rows(client):
     assert len(blend.headers["X-Blend-SHA256"]) == 64
 
 
+def test_submit_by_shared_path_skips_upload_and_hands_workers_the_path(client):
+    params = {
+        "name": "nas job",
+        "frame_start": 1,
+        "frame_end": 2,
+        "frame_step": 1,
+        "engine": "CYCLES",
+        "output_format": "PNG",
+        "blender_version": "4.5",
+        "blend_path": "/Volumes/renders/shot42.blend",
+    }
+    response = client.post(
+        "/jobs",
+        headers=HEADERS,
+        files={"params": (None, json.dumps(params))},  # multipart with no blend_file part
+    )
+    assert response.status_code == 201, response.text
+    job_id = response.json()["job_id"]
+
+    work = claim(client).json()
+    assert work["job_id"] == job_id
+    assert work["blend_path"] == "/Volumes/renders/shot42.blend"
+    assert client.get(f"/jobs/{job_id}/blend", headers=HEADERS).status_code == 404
+
+    no_file = client.post(
+        "/jobs",
+        headers=HEADERS,
+        files={"params": (None, json.dumps({**params, "blend_path": None}))},
+    )
+    assert no_file.status_code == 422
+
+
 def test_rejects_ranges_above_ten_thousand_frames(client):
     params = {
         "name": "too large",
@@ -206,6 +238,50 @@ def test_expired_lease_is_requeued(client):
     assert changed == 1
     frame = client.get(f"/jobs/{job_id}", headers=HEADERS).json()["frames"][0]
     assert (frame["state"], frame["attempts"]) == ("pending", 1)
+
+
+def test_worker_status_reflects_db_lease_and_latest_version(client):
+    job_id = submit_job(client)
+    assert claim(client, "mac-mini", "4.5").status_code == 200
+
+    workers = client.get(f"/jobs/{job_id}", headers=HEADERS).json()["workers"]
+    assert len(workers) == 1
+    mini = workers[0]
+    assert (mini["worker_id"], mini["current_frame"], mini["current_job_id"]) == (
+        "mac-mini",
+        1,
+        job_id,
+    )
+    assert not mini["stale"]
+
+    # a worker mid-render holds a lease, so it stays live even if last_seen is old
+    db = client.app.state.db
+    old = (datetime.now(UTC) - timedelta(seconds=300)).isoformat()
+    db._workers["mac-mini"]["last_seen"] = old
+    mini = client.get(f"/jobs/{job_id}", headers=HEADERS).json()["workers"][0]
+    assert not mini["stale"]
+    assert mini["current_frame"] == 1
+
+    # a new poll with a different Blender version updates the row immediately
+    assert claim(client, "mac-mini", "4.2").status_code == 204
+    mini = client.get(f"/jobs/{job_id}", headers=HEADERS).json()["workers"][0]
+    assert mini["blender_version"] == "4.2"
+    assert mini["current_frame"] == 1  # frame lease from the DB, not the poll
+
+    # idle workers that stop polling are pruned after 10 minutes
+    db._workers["retired"] = {
+        "worker_id": "retired",
+        "blender_version": "3.6",
+        "last_seen": old,
+    }
+    db._workers["retired"]["last_seen"] = (
+        datetime.now(UTC) - timedelta(seconds=700)
+    ).isoformat()
+    names = [
+        worker["worker_id"]
+        for worker in client.get(f"/jobs/{job_id}", headers=HEADERS).json()["workers"]
+    ]
+    assert names == ["mac-mini"]
 
 
 def test_dashboard_is_public_but_api_remains_protected(client):

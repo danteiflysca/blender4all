@@ -35,11 +35,20 @@ if bpy is not None:
             default="",
             subtype="PASSWORD",
         )
+        shared_storage: BoolProperty(
+            name="Shared Storage (NAS)",
+            description=(
+                "Submit the saved .blend's path instead of uploading a packed copy. "
+                "The file and its textures must be reachable at the same path on every worker"
+            ),
+            default=False,
+        )
 
         def draw(self, _context):
             layout = self.layout
             layout.prop(self, "coordinator_url")
             layout.prop(self, "farm_token")
+            layout.prop(self, "shared_storage")
 
 
     _CLASSES = (FARMHAND_Preferences, *operators.CLASSES, *panel.CLASSES)

@@ -128,31 +128,43 @@ class FARMHAND_OT_submit(bpy.types.Operator):
             self.report({"ERROR"}, scene.farmhand_error)
             return {"CANCELLED"}
 
-        try:
-            bpy.ops.file.pack_all()
-        except RuntimeError as exc:
-            scene.farmhand_error = f"Could not pack scene assets: {exc}"
-            self.report({"ERROR"}, scene.farmhand_error)
-            return {"CANCELLED"}
+        preferences = _preferences(context)
+        shared_storage = bool(preferences and preferences.shared_storage)
+        self._temp_path = ""
+        if shared_storage:
+            # Workers open the saved file straight off shared storage; textures and
+            # linked assets must also resolve there.
+            if bpy.data.is_dirty:
+                scene.farmhand_error = "Save your latest changes before submitting by shared path."
+                self.report({"ERROR"}, scene.farmhand_error)
+                return {"CANCELLED"}
+            shared_path = bpy.data.filepath
+        else:
+            try:
+                bpy.ops.file.pack_all()
+            except RuntimeError as exc:
+                scene.farmhand_error = f"Could not pack scene assets: {exc}"
+                self.report({"ERROR"}, scene.farmhand_error)
+                return {"CANCELLED"}
 
-        dependencies = _external_dependencies()
-        if dependencies:
-            preview = "; ".join(dependencies[:3])
-            if len(dependencies) > 3:
-                preview += f"; and {len(dependencies) - 3} more"
-            scene.farmhand_error = f"Submission blocked by unpacked external assets: {preview}"
-            self.report({"ERROR"}, scene.farmhand_error)
-            return {"CANCELLED"}
+            dependencies = _external_dependencies()
+            if dependencies:
+                preview = "; ".join(dependencies[:3])
+                if len(dependencies) > 3:
+                    preview += f"; and {len(dependencies) - 3} more"
+                scene.farmhand_error = f"Submission blocked by unpacked external assets: {preview}"
+                self.report({"ERROR"}, scene.farmhand_error)
+                return {"CANCELLED"}
 
-        handle, self._temp_path = tempfile.mkstemp(prefix="farmhand_", suffix=".blend")
-        os.close(handle)
-        try:
-            bpy.ops.wm.save_as_mainfile(filepath=self._temp_path, copy=True)
-        except RuntimeError as exc:
-            Path(self._temp_path).unlink(missing_ok=True)
-            scene.farmhand_error = f"Could not save the Farmhand copy: {exc}"
-            self.report({"ERROR"}, scene.farmhand_error)
-            return {"CANCELLED"}
+            handle, self._temp_path = tempfile.mkstemp(prefix="farmhand_", suffix=".blend")
+            os.close(handle)
+            try:
+                bpy.ops.wm.save_as_mainfile(filepath=self._temp_path, copy=True)
+            except RuntimeError as exc:
+                Path(self._temp_path).unlink(missing_ok=True)
+                scene.farmhand_error = f"Could not save the Farmhand copy: {exc}"
+                self.report({"ERROR"}, scene.farmhand_error)
+                return {"CANCELLED"}
 
         engine = scene.render.engine
         params = {
@@ -170,7 +182,10 @@ class FARMHAND_OT_submit(bpy.types.Operator):
         def upload():
             try:
                 worker_versions = client.known_worker_versions()
-                response = client.submit_job(self._temp_path, params)
+                if shared_storage:
+                    response = client.submit_job_by_path(shared_path, params)
+                else:
+                    response = client.submit_job(self._temp_path, params)
                 if worker_versions and params["blender_version"] not in worker_versions:
                     available = ", ".join(sorted(worker_versions))
                     response["_farmhand_warning"] = (
@@ -179,12 +194,15 @@ class FARMHAND_OT_submit(bpy.types.Operator):
                     )
                 return response
             finally:
-                Path(self._temp_path).unlink(missing_ok=True)
+                if self._temp_path:
+                    Path(self._temp_path).unlink(missing_ok=True)
 
         self._thread = threading.Thread(target=self._result.run, args=(upload,), daemon=True)
         self._thread.start()
         scene.farmhand_in_flight = True
-        scene.farmhand_message = "Uploading packed scene…"
+        scene.farmhand_message = (
+            "Submitting shared blend path…" if shared_storage else "Uploading packed scene…"
+        )
         wm = context.window_manager
         self._timer = wm.event_timer_add(0.2, window=context.window)
         wm.modal_handler_add(self)

@@ -151,6 +151,37 @@ def test_download_retries_bad_digest_and_evicts_to_three_entries(tmp_path):
     assert [call[1] for call in client.calls] == [work["blend_url"], work["blend_url"]]
 
 
+def test_shared_path_blend_is_used_without_download(tmp_path):
+    nas = tmp_path / "nas" / "shot.blend"
+    nas.parent.mkdir()
+    nas.write_bytes(b"nas blend")
+    work = assignment(b"nas blend")
+    work["blend_path"] = str(nas)
+
+    def runner(args, **kwargs):
+        if args[-1] == "--version":
+            return version_runner(args, **kwargs)
+        if args[0] != "/opt/blender":
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        assert args[2] == str(nas)  # renders straight off shared storage
+        pattern = Path(args[args.index("-o") + 1])
+        Path(str(pattern).replace("####", "0147") + ".png").write_bytes(PNG)
+        return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
+
+    client = Client(posts=[Response(200)])
+    Worker(config(tmp_path), client=client, runner=runner).process(work)
+
+    assert all(call[0] != "GET" for call in client.calls)
+    assert client.uploads == [PNG]
+
+    missing = dict(work, blend_path=str(tmp_path / "gone.blend"))
+    client = Client(posts=[Response(200)])
+    Worker(config(tmp_path), client=client, runner=runner).process(missing)
+    payload = client.calls[-1][2]["json"]
+    assert payload["status"] == "failed"
+    assert "not found" in payload["stderr_tail"]
+
+
 def test_disk_guard_refuses_download_below_five_gib(tmp_path):
     blend = b"blend"
     worker = Worker(
@@ -173,6 +204,8 @@ def test_process_renders_valid_frame_uploads_with_retries_and_cleans_output(tmp_
     def runner(args, **kwargs):
         if args[-1] == "--version":
             return version_runner(args, **kwargs)
+        if args[0] != "/opt/blender":  # hardware detection probes
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
         render_calls.append((args, kwargs))
         pattern = Path(args[args.index("-o") + 1])
         Path(str(pattern).replace("####", "0147") + ".png").write_bytes(PNG)
@@ -237,7 +270,7 @@ def test_poll_loop_parses_version_once_and_survives_network_error(tmp_path):
 
     worker.run_forever(max_polls=2)
 
-    assert calls == [["/opt/blender", "--version"]]
+    assert calls.count(["/opt/blender", "--version"]) == 1
     assert sleeps == [3, 3]
     work_calls = [call for call in client.calls if call[1] == "/work"]
     assert work_calls[-1][2]["params"]["blender_version"] == "4.5"

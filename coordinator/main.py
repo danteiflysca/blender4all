@@ -101,15 +101,21 @@ def create_app(
 
     @application.post("/jobs", status_code=status.HTTP_201_CREATED)
     async def submit_job(
-        blend_file: Annotated[UploadFile, File()], params: Annotated[str, Form()]
+        params: Annotated[str, Form()],
+        blend_file: Annotated[UploadFile | None, File()] = None,
     ):
-        if shutil.disk_usage(root).free < min_free_bytes:
-            raise HTTPException(507, "Coordinator has less than 5GB free")
         try:
             parsed = JobParams.model_validate(json.loads(params))
         except (json.JSONDecodeError, ValidationError) as exc:
             raise HTTPException(422, f"Invalid job params: {exc}") from exc
         job_id = uuid.uuid4().hex
+        if parsed.blend_path:
+            database.create_job(job_id, parsed, "")
+            return {"job_id": job_id}
+        if blend_file is None:
+            raise HTTPException(422, "blend_file is required unless blend_path is set")
+        if shutil.disk_usage(root).free < min_free_bytes:
+            raise HTTPException(507, "Coordinator has less than 5GB free")
         destination = blend_dir / f"{job_id}.blend"
         try:
             digest = await stream_upload(blend_file, destination)
@@ -133,8 +139,12 @@ def create_app(
         return {"status": "cancelled"}
 
     @application.get("/work")
-    async def get_work(worker_id: str, blender_version: str):
-        work = database.claim_work(worker_id, blender_version)
+    async def get_work(
+        worker_id: str, blender_version: str, os: str = "", cpu: str = "", gpu: str = ""
+    ):
+        work = database.claim_work(
+            worker_id, blender_version, hardware={"os": os, "cpu": cpu, "gpu": gpu}
+        )
         return work if work else Response(status_code=204)
 
     @application.get("/jobs/{job_id}/blend")

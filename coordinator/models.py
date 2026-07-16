@@ -13,6 +13,8 @@ class JobParams(BaseModel):
     output_format: Literal["PNG"] = "PNG"
     engine: Literal["CYCLES", "BLENDER_EEVEE", "BLENDER_EEVEE_NEXT"] = "CYCLES"
     blender_version: str = Field(min_length=3, max_length=40)
+    # Shared-storage mode: workers open this path directly instead of downloading.
+    blend_path: str | None = Field(default=None, min_length=1, max_length=1024)
 
     @model_validator(mode="after")
     def validate_range(self) -> JobParams:
